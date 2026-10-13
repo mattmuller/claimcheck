@@ -40,8 +40,10 @@ Only for one step, and that step can be done by hand.
 | Mutate and rerun | Plain code. No model. |
 | Verdict | Plain code. No model. |
 
-The guarantee does not depend on the model. A model can write a weak check, but a weak check
-passes on the mutant too and is thrown out as NO-TEETH. It cannot produce a PROVEN on its own.
+A model cannot produce a PROVEN on its own: the check must also fail when the located code is
+broken. A check that never touches that code passes on the mutant and is thrown out as NO-TEETH.
+A check can still test the wrong thing and pass both rules, which is why a second, independent
+review step is planned.
 
 ## Status
 
