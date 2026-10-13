@@ -15,6 +15,7 @@ For each claim it:
 2. **Locates** candidate code by rules first: the number in every equivalent unit, constant names,
    SQL intervals, cron schedules and configuration keys. A model may only rank what was found.
 3. **Writes a check**: a small executable test that exercises the located code, not just its literal.
+   This is the only step that uses an AI model, and a person can do it instead.
 4. **Proves the check has teeth**: it mutates exactly the located token (60 becomes 61), reruns the
    check, and restores the file. A check that still passes on the mutant proves nothing.
 5. **Gives a verdict** from a fixed set:
@@ -26,6 +27,21 @@ For each claim it:
 | NO-TEETH | The check passes on both. It is discarded. |
 | NOT-LOCATED | No candidate code was found. |
 | NOT-CHECKABLE | The claim cannot be expressed as an executable check. |
+
+## Does it need an AI model?
+
+Only for one step, and that step can be done by hand.
+
+| Step | How it runs |
+|---|---|
+| Parse the claim | Rules. No model. |
+| Locate candidate code | Rules. No model. |
+| Write the check | A model, **or** a person or agent session writing `answer.json` by hand. |
+| Mutate and rerun | Plain code. No model. |
+| Verdict | Plain code. No model. |
+
+The guarantee does not depend on the model. A model can write a weak check, but a weak check
+passes on the mutant too and is thrown out as NO-TEETH. It cannot produce a PROVEN on its own.
 
 ## Status
 
