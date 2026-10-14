@@ -28,9 +28,29 @@ function tsxCli(): string {
   return join(dirname(pkgPath), typeof bin === 'string' ? bin : bin.tsx);
 }
 
+const ENV_ALLOW = ['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL', 'TZ', 'SystemRoot', 'ComSpec', 'PATHEXT', 'NODE_OPTIONS'];
+const SENSITIVE = /(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i;
+
+/** The environment a check runs in: a short allow-list, never an API key or anything that looks like a secret. */
+export function checkEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const name of ENV_ALLOW) {
+    const v = env[name];
+    if (v === undefined || SENSITIVE.test(name) || name.startsWith('CLAIMCHECK_')) continue;
+    out[name] = v;
+  }
+  return out;
+}
+
+/** Replace the gateway key, if it appears in captured output, before the output is stored. */
+export function redact(text: string, env: NodeJS.ProcessEnv = process.env): string {
+  const key = env.AI_GATEWAY_API_KEY;
+  return key ? text.split(key).join('[redacted]') : text;
+}
+
 export function runCheck(repo: string, checkFile: string): RunOut {
-  const r = spawnSync(process.execPath, [tsxCli(), checkFile], { cwd: repo, encoding: 'utf8', timeout: 120_000 });
-  const output = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(-2500);
+  const r = spawnSync(process.execPath, [tsxCli(), checkFile], { cwd: repo, encoding: 'utf8', timeout: 120_000, env: checkEnv() });
+  const output = redact(`${r.stdout ?? ''}${r.stderr ?? ''}`).trim().slice(-2500);
   if (r.status === 0) return { status: 'pass', output };
   // only an AssertionError counts as the claim failing; anything else means the check could not run
   return { status: /AssertionError/.test(output) ? 'assertion-fail' : 'crash', output };

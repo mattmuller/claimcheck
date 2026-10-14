@@ -298,7 +298,7 @@ stderr that says what to fix.
 
 ```json
 {
-  "tool": "claimcheck", "version": "0.1.0", "command": "execute", "repo": "/tmp/repo", "exitCode": 1,
+  "tool": "claimcheck", "version": "0.1.1", "command": "execute", "repo": "/tmp/repo", "exitCode": 1,
   "summary": { "PROVEN": 3, "CONTRADICTED": 1, "NO-TEETH": 0, "NOT-LOCATED": 1, "NOT-CHECKABLE": 0, "total": 5 },
   "claims": [
     { "id": "c38", "quote": "Workers send a heartbeat every 5 seconds.", "class": "CONTRADICTED",

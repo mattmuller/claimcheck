@@ -2,10 +2,10 @@
 // Searching it in-process, with JavaScript regular expressions, keeps the patterns' meaning the same on
 // every machine. `git grep -E` uses the system's POSIX regex library, which on macOS silently treats `\b`
 // and `[^\n]` differently, so the same pattern found the line on one machine and nothing on another.
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EXCLUDE } from './excludes';
+import { git, isSafeRegularFile } from './gitutil';
 
 export interface SourceFile { file: string; text: string; lines: string[] }
 
@@ -13,8 +13,9 @@ const MAX_FILE_BYTES = 512 * 1024;
 const cache = new Map<string, SourceFile[]>();
 
 export function trackedFiles(repo: string): string[] {
-  const r = spawnSync('git', ['ls-files', '-z', '--', '.', ...EXCLUDE], { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return (r.stdout || '').split('\0').filter(Boolean);
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024 });
+  // a tracked symlink, or a path that resolves outside the repository, is never read
+  return (r.stdout || '').split('\0').filter(Boolean).filter((f) => isSafeRegularFile(repo, f));
 }
 
 export function readCorpus(repo: string): SourceFile[] {

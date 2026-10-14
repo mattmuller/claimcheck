@@ -4,10 +4,10 @@
 //   author : same as a person filling answer.json, but asks the model named by CLAIMCHECK_MODEL
 // Flags: --json (one JSON object on stdout, human lines on stderr), --json-file <path>, --strict, --only <id>
 // Exit codes (pytest convention): 0 nothing wrong, 1 a claim looks false (or --strict gap), 2 could not check.
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { expandTerms } from './expand';
+import { git } from './gitutil';
 import { locate } from './locate';
 import { askModel, modelAvailable } from './model';
 import { parsePeriods } from './parse';
@@ -30,17 +30,21 @@ function version(): string {
   try { return JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version; } catch { return 'unknown'; }
 }
 
+const CLAIM_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
 function loadClaims(path: string): { id: string; quote: string }[] {
   let parsed: unknown;
   try { parsed = JSON.parse(readFileSync(path, 'utf8')); } catch (e) { return fail(`cannot read claims file ${path}: ${(e as Error).message}`); }
   if (!Array.isArray(parsed) || parsed.some((c) => typeof c?.id !== 'string' || typeof c?.quote !== 'string')) {
     return fail(`claims file ${path} must be a JSON array of { "id": string, "quote": string }`);
   }
+  const bad = parsed.find((c) => !CLAIM_ID.test(c.id));
+  if (bad) return fail(`invalid claim id ${JSON.stringify(bad.id)} in ${path}: ids must match ${CLAIM_ID} (letters, digits, dot, underscore, hyphen; at most 64)`);
   return parsed;
 }
 
 function isDirty(repo: string, file: string): boolean {
-  return spawnSync('git', ['diff', '--quiet', '--', file], { cwd: repo }).status !== 0;
+  return git(repo, ['diff', '--quiet', '--', file]).status !== 0;
 }
 
 async function run(): Promise<{ report: Record<string, unknown>; exitCode: number }> {
@@ -49,7 +53,7 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
   const out = resolve(opt('out') ?? 'results');
   const only = opt('only');
   const strict = flag('strict');
-  if (!existsSync(repo) || spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: repo }).status !== 0) fail(`--repo ${repo} is not a git repository`);
+  if (!existsSync(repo) || git(repo, ['rev-parse', '--show-toplevel']).status !== 0) fail(`--repo ${repo} is not a git repository`);
   const all = loadClaims(resolve(opt('claims') ?? 'claims.json'));
   const claims = all.filter((x) => !only || x.id === only);
   if (only && claims.length === 0) fail(`--only ${only}: no such claim id in the claims file`);
@@ -61,6 +65,7 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
     const errors: string[] = [];
     const summary: Record<string, number> = Object.fromEntries(CLASSES.map((k) => [k, 0]));
     for (const c of claims) {
+      await new Promise((r) => setImmediate(r)); // let a pending SIGINT/SIGTERM run its restore-and-exit handler between claims
       const checkFile = join(out, 'checks', `${c.id}.check.ts`);
       const f = w(c.id, 'answer.json');
       let klass: Class; let reason: string; let extra: Record<string, unknown> = {};

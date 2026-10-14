@@ -2,14 +2,14 @@
 // Text search finds the number 900000. It cannot find `const CACHE_TTL = 15 * MINUTE`, where MINUTE lives in
 // another file and no line holds 900000. This folds constants (through imports, JSON, enums, env defaults and
 // tiny helper functions) and reports the line of the literal a person would edit.
-// The compiler is loaded from the target repository first, then from claimcheck's own dev dependency.
+// The compiler is claimcheck's own copy (a runtime dependency), never the target repository's.
 // If neither loads, or the repository has no TypeScript or JavaScript, this returns nothing.
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import type * as TS from 'typescript';
 import { EXCLUDE } from './excludes';
+import { git, isSafeRegularFile } from './gitutil';
 import { type Equivalent, type Period, equivalents } from './parse';
 import { splitWords } from './terms';
 
@@ -295,10 +295,10 @@ class Folder {
 }
 
 function trackedRoots(repo: string): string[] {
-  const r = spawnSync('git', ['ls-files', '-z', '--', '.', ...EXCLUDE], { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024 });
   const out: string[] = [];
   for (const f of (r.stdout || '').split('\0')) {
-    if (!f || !ROOT_EXT.test(f)) continue;
+    if (!f || !ROOT_EXT.test(f) || !isSafeRegularFile(repo, f)) continue;
     try { if (statSync(join(repo, f)).size > 512 * 1024) continue; } catch { continue; }
     out.push(f);
     if (out.length >= MAX_ROOTS) break;
