@@ -7,7 +7,7 @@ Please include what you ran, what happened, and the package version (`npm ls @ma
 
 ## What this tool does to your system
 
-`prepare` only reads the target repository. `execute` runs the checks you or an agent wrote, and temporarily edits one line of one file in the target repository, restoring it with `git checkout`. Run it on a clean checkout of code you are happy to execute.
+`prepare` only reads the target repository. `execute` runs the checks you or an agent wrote, and temporarily edits one line of one file in the target repository, writing the original bytes back afterwards and checking them against git's stored copy. Run it on a clean checkout of code you are happy to execute.
 
 `execute` refuses a target that is untracked, a symlink, or outside the repository. It also refuses an absolute path or a path with `..` in it. If it cannot restore the edited file, it stops with an error that names the file.
 

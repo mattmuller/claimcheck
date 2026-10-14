@@ -1,8 +1,19 @@
 # claimcheck
 
+[![npm version](https://img.shields.io/npm/v/@mattmuller/claimcheck)](https://www.npmjs.com/package/@mattmuller/claimcheck)
+[![CI](https://github.com/mattmuller/claimcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/mattmuller/claimcheck/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/npm/l/@mattmuller/claimcheck)](LICENSE)
+
 > **Early draft.** This is research code under active development. The interface, verdicts and
 > results will change. Do not rely on it yet, and run it only on code you are happy to have copied
 > and executed.
+
+## For AI agents
+
+- **Skill.** `skills/claimcheck/SKILL.md` teaches an agent the whole loop. The agent is the model, so no API key is needed.
+- **Exit codes.** `execute` returns 0 when no claim is CONTRADICTED or NO-TEETH, 1 when at least one is, and 2 when it could not check. See [Exit codes and JSON](#exit-codes-and-json).
+- **JSON.** Add `--json` to get one JSON object on stdout. Human lines go to stderr.
+- **Safety rule.** `execute` edits one line of one file in the target repository and writes the original bytes back afterwards. It refuses a file with uncommitted changes. Run it on a clean checkout.
 
 READMEs, runbooks, comments and design notes make claims about how code behaves: "cache entries
 expire after 10 minutes", "a request times out after 30 seconds", "log files rotate every 7 days",
@@ -277,8 +288,8 @@ called through an OpenAI-compatible endpoint (`CLAIMCHECK_GATEWAY_URL`, key in
 the Agent Skills format, the whole loop. The agent is the model, so no API key is needed. Copy or link
 the folder `skills/claimcheck` into the agent's skills directory.
 
-`execute` edits files in the target repository to build mutants and restores them with
-`git checkout`. Run it on a clean checkout you do not mind being touched.
+`execute` edits files in the target repository to build mutants and writes the original
+bytes back afterwards. Run it on a clean checkout you do not mind being touched.
 
 ## Exit codes and JSON
 

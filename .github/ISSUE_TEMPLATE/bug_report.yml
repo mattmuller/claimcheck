@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a wrong verdict, a crash or a wrong exit code.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security problems here. Use the [private advisory page](https://github.com/mattmuller/claimcheck/security/advisories/new).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Run `npm ls @mattmuller/claimcheck`. The `--json` report also shows it.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: Claim
+      description: The claim text, and the line of code that sets the value if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: The verdict or behaviour you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: The verdict or behaviour you got.
+    validations:
+      required: true
+  - type: textarea
+    id: json
+    attributes:
+      label: Output of `--json`
+      description: Run the same command with `--json`. Remove anything private before you paste.
+      render: json
+    validations:
+      required: true
