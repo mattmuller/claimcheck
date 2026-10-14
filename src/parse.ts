@@ -19,14 +19,19 @@ const UNIT_RE: Record<Unit, string> = {
 
 const WORDS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  twelve: 12, fourteen: 14, thirty: 30, sixty: 60, ninety: 90,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19, twenty: 20, 'twenty-four': 24, thirty: 30, forty: 40, 'forty-five': 45, 'forty-eight': 48,
+  fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, 'a hundred': 100, 'one hundred': 100,
+  half: 0.5, 'half an': 0.5, 'half a': 0.5,
 };
+// longest first, so "twenty-four" wins over "twenty" and "half an" over "an"
+const WORD_ALT = Object.keys(WORDS).sort((a, b) => b.length - a.length).join('|');
 
 export function parsePeriods(claim: string): Period[] {
   const out: Period[] = [];
   const seen = new Set<string>();
   for (const [unit, re] of Object.entries(UNIT_RE) as [Unit, string][]) {
-    const rx = new RegExp(`\\b(\\d+(?:\\.\\d+)?|${Object.keys(WORDS).join('|')})[\\s-]+(?:${re})\\b`, 'gi');
+    const rx = new RegExp(`\\b(\\d+(?:\\.\\d+)?|${WORD_ALT})[\\s-]+(?:${re})\\b`, 'gi');
     for (const m of claim.matchAll(rx)) {
       const raw = m[1].toLowerCase();
       const value = raw in WORDS ? WORDS[raw] : Number(raw);

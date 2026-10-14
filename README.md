@@ -193,28 +193,29 @@ something the code does not do. `npm run bench` reproduces every number here.
 
 | Search | Right line first | In the top 5 | In the top 10 | Time, 35 claims |
 |---|---|---|---|---|
-| First draft, as committed, on macOS | 6% | 6% | 6% | 2.5 s |
-| First draft, regex bug fixed | 49% | 63% | 63% | 2.1 s |
-| 1. Patterns, in-process | 51% | 69% | 69% | 0.02 s |
-| 1–3. + synonyms and BM25 | 71% | 100% | 100% | 0.15 s |
-| 1–4. + value map | **74%** | **100%** | **100%** | 1.2 s |
-| 1–5. + model-suggested words | 74% | 97% | 100% | 0.9 s |
+| First draft, as committed, on macOS | 6% | 6% | 6% | 3.4 s |
+| First draft, regex bug fixed | 51% | 69% | 69% | 2.2 s |
+| 1. Patterns, in-process | 54% | 74% | 74% | 0.03 s |
+| 1–3. + synonyms and BM25 | 74% | 100% | 100% | 0.15 s |
+| 1–4. + value map | **77%** | **100%** | **100%** | 1.1 s |
+| 1–5. + model-suggested words | 77% | 97% | 100% | 0.7 s |
 
 The first draft used `git grep -E`. On macOS that uses the system's POSIX regex library, which
 does not read `\b` (a word boundary) or `[^\n]` the way the patterns meant, so it found almost
 nothing and said nothing about it. The benchmark found that on its first run. The second row is
-the fair starting point.
+the fair starting point. Every row uses today's claim parser, which also reads numbers written as
+words, such as "fifteen minutes" or "half an hour".
 
 By the kind of claim (right line in the top 5, before and after):
 
 | Kind | Example | Fixed first draft | Now |
 |---|---|---|---|
 | Number and unit together | `LOG_RETENTION_DAYS = 90` | 3 of 3 | 3 of 3 |
-| Different words | "given up on after three days" vs `abandonAfterDays: 3` | 1 of 5 | 5 of 5 |
+| Different words | "given up on after three days" vs `abandonAfterDays: 3` | 2 of 5 | 5 of 5 |
 | Different unit | "2 hours" vs `7_200_000` | 4 of 4 | 4 of 4 |
 | Built from other constants | `10 * MINUTE` | 5 of 5 | 5 of 5 |
 | In a configuration file | `"cooldownMinutes": 90` | 2 of 4 | 4 of 4 |
-| Default behind an environment variable | `?? 900` | 2 of 3 | 3 of 3 |
+| Default behind an environment variable | `?? 900` | 3 of 3 | 3 of 3 |
 | SQL interval or schedule | `interval '180 days'`, `'*/10 * * * *'` | 2 of 4 | 4 of 4 |
 | Same number used elsewhere too | a 30-day period next to a page size of 30 | 3 of 4 | 4 of 4 |
 | **False claim** (different value in code) | "every 5 seconds" vs `20 * SECOND` | **0 of 3** | **3 of 3** |
@@ -269,8 +270,44 @@ npm test
 called through an OpenAI-compatible endpoint (`CLAIMCHECK_GATEWAY_URL`, key in
 `AI_GATEWAY_API_KEY`). Without a model, a person or agent writes each `answer.json` by hand.
 
+**Use it from an AI agent.** `skills/claimcheck/SKILL.md` teaches Claude Code, and any agent that reads
+the Agent Skills format, the whole loop. The agent is the model, so no API key is needed. Copy or link
+the folder `skills/claimcheck` into the agent's skills directory.
+
 `execute` edits files in the target repository to build mutants and restores them with
 `git checkout`. Run it on a clean checkout you do not mind being touched.
+
+## Exit codes and JSON
+
+Exit codes follow the pytest convention. A script or CI job can read them directly.
+
+| Code | `execute` | `prepare` and `author` |
+|---|---|---|
+| 0 | No claim is CONTRADICTED or NO-TEETH. | Done. |
+| 1 | At least one claim is CONTRADICTED or NO-TEETH. With `--strict`, a NOT-LOCATED or NOT-CHECKABLE claim also gives 1. | Not used. |
+| 2 | Could not check: bad arguments, unknown command, missing or invalid claims file, `--repo` not a git repository, target file has uncommitted changes, or a crash. | Same. `author` also gives 2 when no model is configured or a call fails. |
+
+A claim with no `answer.json` yet is reported as NOT-CHECKABLE. Code 2 always prints one line on
+stderr that says what to fix.
+
+`--json` prints one JSON object on stdout and nothing else. The human lines go to stderr.
+`--json-file <path>` writes the same object to a file. Both work with all three commands.
+
+```json
+{
+  "tool": "claimcheck", "version": "0.0.1", "command": "execute", "repo": "/tmp/repo", "exitCode": 1,
+  "summary": { "PROVEN": 3, "CONTRADICTED": 1, "NO-TEETH": 0, "NOT-LOCATED": 1, "NOT-CHECKABLE": 0, "total": 5 },
+  "claims": [
+    { "id": "c38", "quote": "Workers send a heartbeat every 5 seconds.", "class": "CONTRADICTED",
+      "reason": "the check fails on real code", "located": "src/jobs/queue.ts:5",
+      "checkKind": "behavioural", "mutationDiff": null }
+  ]
+}
+```
+
+For `prepare`, each claim carries `periods` and the top 5 `candidates`
+(`file`, `line`, `text`, `why`, `score`, `usedBy`). The full list of 25 stays in
+`<out>/work/<id>/candidates.json`.
 
 ## Licence
 

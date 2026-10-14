@@ -1,0 +1,42 @@
+{
+  "skill_name": "claimcheck",
+  "setup": "Copy bench/fixture to a temp folder, run git init, git add -A and git commit. That folder is the repo under test. Claim ids and quotes come from bench/claims.json.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Our README says \"Cached thumbnails expire after 10 minutes.\" Can you check that against the code in the repo I just copied to /tmp/fixture-repo? Use claim id c13.",
+      "expected_output": "Claim c13 ends PROVEN, located at src/cache/thumbnailCache.ts.",
+      "assertions": [
+        "work/c13/result.json has class PROVEN",
+        "the located file is src/cache/thumbnailCache.ts",
+        "the check source imports the real thumbnailCache module and calls it (checkKind is behavioural)",
+        "the final reply says the claim holds and names the file and line",
+        "git status in the repo is clean after the run"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A runbook in /tmp/fixture-repo claims \"Workers send a heartbeat every 5 seconds.\" (id c38). Is that still true? I do not trust it.",
+      "expected_output": "Claim c38 ends CONTRADICTED because the code uses 20 seconds.",
+      "assertions": [
+        "work/c38/result.json has class CONTRADICTED",
+        "the located file is src/jobs/queue.ts",
+        "the final reply says the claim looks false and states that the code uses 20 seconds",
+        "the agent did not weaken the check to make it pass",
+        "git status in the repo is clean after the run"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Please verify these two sentences from our docs against /tmp/fixture-repo: c33 \"Cached thumbnails are regenerated every 12 hours.\" and c22 \"Signed upload links stop working after fifteen minutes.\" Tell me which ones you could not verify and why.",
+      "expected_output": "c33 ends NOT-LOCATED (nothing regenerates thumbnails on a schedule). c22 ends PROVEN.",
+      "assertions": [
+        "work/c33/result.json has class NOT-LOCATED",
+        "work/c22/result.json has class PROVEN",
+        "the final reply separates verified claims from unverified ones",
+        "the final reply does not call c33 true",
+        "the execute exit code was 0 without --strict and 1 with --strict"
+      ]
+    }
+  ]
+}

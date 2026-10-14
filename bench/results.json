@@ -1,8 +1,8 @@
 {
  "claims": 38,
  "scored": 35,
- "noPeriod": 2,
- "noPeriodWithGold": 2,
+ "noPeriod": 1,
+ "noPeriodWithGold": 1,
  "results": {
   "original (git grep)": {
    "overall": {
@@ -77,15 +77,15 @@
      "mrr": 0
     }
    },
-   "ms": 2310
+   "ms": 3385
   },
   "original (regex fixed)": {
    "overall": {
     "n": 35,
-    "hit1": 17,
-    "hit5": 22,
-    "hit10": 22,
-    "mrr": 19.333333333333332
+    "hit1": 18,
+    "hit5": 24,
+    "hit10": 24,
+    "mrr": 20.666666666666664
    },
    "byKind": {
     "direct": {
@@ -97,10 +97,10 @@
     },
     "wording": {
      "n": 5,
-     "hit1": 0,
-     "hit5": 1,
-     "hit10": 1,
-     "mrr": 0.5
+     "hit1": 1,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 1.5
     },
     "converted": {
      "n": 4,
@@ -126,9 +126,9 @@
     "env-default": {
      "n": 3,
      "hit1": 0,
-     "hit5": 2,
-     "hit10": 2,
-     "mrr": 1
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 1.3333333333333333
     },
     "sql": {
      "n": 4,
@@ -152,15 +152,15 @@
      "mrr": 0
     }
    },
-   "ms": 1938
+   "ms": 2173
   },
   "rules": {
    "overall": {
     "n": 35,
-    "hit1": 18,
-    "hit5": 24,
-    "hit10": 24,
-    "mrr": 20.833333333333332
+    "hit1": 19,
+    "hit5": 26,
+    "hit10": 26,
+    "mrr": 22.166666666666664
    },
    "byKind": {
     "direct": {
@@ -172,10 +172,10 @@
     },
     "wording": {
      "n": 5,
-     "hit1": 0,
-     "hit5": 1,
-     "hit10": 1,
-     "mrr": 0.5
+     "hit1": 1,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 1.5
     },
     "converted": {
      "n": 4,
@@ -201,9 +201,9 @@
     "env-default": {
      "n": 3,
      "hit1": 0,
-     "hit5": 2,
-     "hit10": 2,
-     "mrr": 1
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 1.3333333333333333
     },
     "sql": {
      "n": 4,
@@ -227,15 +227,15 @@
      "mrr": 0
     }
    },
-   "ms": 18
+   "ms": 30
   },
   "+synonyms+bm25": {
    "overall": {
     "n": 35,
-    "hit1": 25,
+    "hit1": 26,
     "hit5": 35,
     "hit10": 35,
-    "mrr": 28.93333333333333
+    "mrr": 29.43333333333333
    },
    "byKind": {
     "direct": {
@@ -247,10 +247,10 @@
     },
     "wording": {
      "n": 5,
-     "hit1": 1,
+     "hit1": 2,
      "hit5": 5,
      "hit10": 5,
-     "mrr": 2.533333333333333
+     "mrr": 3.033333333333333
     },
     "converted": {
      "n": 4,
@@ -302,15 +302,15 @@
      "mrr": 2
     }
    },
-   "ms": 144
+   "ms": 153
   },
   "+graph": {
    "overall": {
     "n": 35,
-    "hit1": 26,
+    "hit1": 27,
     "hit5": 35,
     "hit10": 35,
-    "mrr": 29.43333333333333
+    "mrr": 29.93333333333333
    },
    "byKind": {
     "direct": {
@@ -322,10 +322,10 @@
     },
     "wording": {
      "n": 5,
-     "hit1": 2,
+     "hit1": 3,
      "hit5": 5,
      "hit10": 5,
-     "mrr": 3.2
+     "mrr": 3.7
     },
     "converted": {
      "n": 4,
@@ -377,15 +377,15 @@
      "mrr": 1.8333333333333333
     }
    },
-   "ms": 1125
+   "ms": 1055
   },
   "+model terms": {
    "overall": {
     "n": 35,
-    "hit1": 26,
+    "hit1": 27,
     "hit5": 34,
     "hit10": 35,
-    "mrr": 29.259523809523806
+    "mrr": 29.759523809523806
    },
    "byKind": {
     "direct": {
@@ -397,10 +397,10 @@
     },
     "wording": {
      "n": 5,
-     "hit1": 2,
+     "hit1": 3,
      "hit5": 5,
      "hit10": 5,
-     "mrr": 3.25
+     "mrr": 3.75
     },
     "converted": {
      "n": 4,
@@ -452,7 +452,7 @@
      "mrr": 1.6666666666666665
     }
    },
-   "ms": 704
+   "ms": 724
   }
  },
  "perClaim": {
@@ -506,11 +506,11 @@
   },
   "c07": {
    "original (git grep)": null,
-   "original (regex fixed)": null,
-   "rules": null,
-   "+synonyms+bm25": 2,
-   "+graph": 2,
-   "+model terms": 2
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
   },
   "c08": {
    "original (git grep)": null,
@@ -626,8 +626,8 @@
   },
   "c22": {
    "original (git grep)": null,
-   "original (regex fixed)": null,
-   "rules": null,
+   "original (regex fixed)": 3,
+   "rules": 3,
    "+synonyms+bm25": 1,
    "+graph": 1,
    "+model terms": 1
