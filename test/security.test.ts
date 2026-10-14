@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -67,9 +67,21 @@ describe('withMutation refuses unsafe targets', () => {
 });
 
 describe('restore', () => {
-  it('throws loudly, naming the file, when git cannot restore it', () => {
+  it('throws loudly, naming the file, when the file cannot be written back', () => {
     const repo = tempRepo(FILES);
-    expect(() => withMutation(repo, target(), () => { writeFileSync(join(repo, '.git/index.lock'), ''); return 1; })).toThrow(/could not restore src\/a\.ts/);
+    expect(() => withMutation(repo, target(), () => { chmodSync(join(repo, 'src/a.ts'), 0o444); return 1; })).toThrow(/could not restore src\/a\.ts/);
+    chmodSync(join(repo, 'src/a.ts'), 0o644);
+  });
+  it('never runs a clean or smudge filter defined by the target repository', () => {
+    const repo = tempRepo({ ...FILES, '.gitattributes': '*.ts filter=trap\n' });
+    const marker = join(scratch(), 'filter-ran');
+    for (const k of ['clean', 'smudge']) {
+      spawnSync('git', ['config', `filter.trap.${k}`, `sh -c 'touch ${marker}; cat'`], { cwd: repo });
+    }
+    const r = withMutation(repo, target(), () => 1);
+    expect('error' in r ? r.error : 'ok').toBe('ok');
+    expect(existsSync(marker)).toBe(false);
+    expect(readFileSync(join(repo, 'src/a.ts'), 'utf8')).toBe('export const TTL = 600;\n');
   });
   it('puts the file back when the process gets SIGTERM during a run', () => {
     const repo = tempRepo(FILES);

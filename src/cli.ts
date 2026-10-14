@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { expandTerms } from './expand';
-import { git } from './gitutil';
+import { git, unchanged } from './gitutil';
 import { locate } from './locate';
 import { askModel, modelAvailable } from './model';
 import { parsePeriods } from './parse';
@@ -44,7 +44,7 @@ function loadClaims(path: string): { id: string; quote: string }[] {
 }
 
 function isDirty(repo: string, file: string): boolean {
-  return git(repo, ['diff', '--quiet', '--', file]).status !== 0;
+  return !unchanged(repo, file);
 }
 
 async function run(): Promise<{ report: Record<string, unknown>; exitCode: number }> {

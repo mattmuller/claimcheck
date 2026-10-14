@@ -1,7 +1,7 @@
 // Stage 4 helper: mutate exactly one token on one line, run, restore with git.
 import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, sep } from 'node:path';
-import { git } from './gitutil';
+import { git, readBytes, unchanged } from './gitutil';
 
 export interface Target {
   file: string;
@@ -41,10 +41,15 @@ export function refuseTarget(repo: string, file: string): string | null {
   return null;
 }
 
-function restore(repo: string, file: string): void {
-  const r = git(repo, ['checkout', '--', file]);
-  if (r.status !== 0) {
-    throw new Error(`claimcheck could not restore ${file} (git checkout exited ${r.status}). The file in ${repo} is still MUTATED. Run: git -C ${repo} checkout -- ${file}`);
+function restore(repo: string, file: string, original: Buffer): void {
+  // Write the saved bytes back ourselves: `git checkout` would run the target's smudge filter.
+  try {
+    writeFileSync(join(repo, file), original);
+  } catch (e) {
+    throw new Error(`claimcheck could not restore ${file} (${(e as Error).message}). The file in ${repo} is still MUTATED. Restore it with: git -C ${repo} checkout -- ${file}`);
+  }
+  if (!unchanged(repo, file)) {
+    throw new Error(`claimcheck could not restore ${file}: it no longer matches the committed version. The file in ${repo} may still be MUTATED. Check it with: git -C ${repo} diff -- ${file}`);
   }
 }
 
@@ -52,14 +57,15 @@ export function withMutation<T>(repo: string, t: Target, run: () => T): { diff: 
   const refused = refuseTarget(repo, t.file);
   if (refused) return { error: refused };
   const path = join(repo, t.file);
-  if (git(repo, ['diff', '--quiet', '--', t.file]).status !== 0) return { error: `${t.file} has uncommitted changes; refusing to mutate` };
-  const lines = readFileSync(path, 'utf8').split('\n');
+  if (!unchanged(repo, t.file)) return { error: `${t.file} has uncommitted changes; refusing to mutate` };
+  const original = readBytes(repo, t.file);
+  const lines = original.toString('utf8').split('\n');
   const m = lines[t.line - 1] === undefined ? null : mutatedLine(lines[t.line - 1], t.token);
   if (!m) return { error: `token ${JSON.stringify(t.token)} not found (or has no number) on ${t.file}:${t.line}` };
   lines[t.line - 1] = m.after;
   // Ctrl-C or a kill must not leave the target edited. The handler runs once the blocking run() returns.
   const onSignal = (sig: NodeJS.Signals) => {
-    try { restore(repo, t.file); } catch (e) { console.error(`claimcheck: ${(e as Error).message}`); }
+    try { restore(repo, t.file, original); } catch (e) { console.error(`claimcheck: ${(e as Error).message}`); }
     process.exit(sig === 'SIGINT' ? 130 : 143);
   };
   const onInt = () => onSignal('SIGINT');
@@ -68,10 +74,11 @@ export function withMutation<T>(repo: string, t: Target, run: () => T): { diff: 
   process.on('SIGTERM', onTerm);
   writeFileSync(path, lines.join('\n'));
   try {
-    const diff = git(repo, ['diff', '-U0', '--', t.file]).stdout;
+    // Our own one-line diff: `git diff` would run the target's clean filter.
+    const diff = `--- a/${t.file}\n+++ b/${t.file}\n@@ -${t.line} +${t.line} @@\n-${m.before}\n+${m.after}\n`;
     return { diff, result: run() };
   } finally {
-    try { restore(repo, t.file); } finally {
+    try { restore(repo, t.file, original); } finally {
       // A signal that arrived while run() blocked is delivered on the next loop turn. Keep the handlers
       // briefly, or the signal is swallowed and the process carries on.
       setTimeout(() => { process.off('SIGINT', onInt); process.off('SIGTERM', onTerm); }, 100).unref();
