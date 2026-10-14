@@ -23,6 +23,68 @@ const asJson = flag('json');
 // with --json, stdout carries the report and nothing else
 const say = (s: string) => (asJson ? console.error(s) : console.log(s));
 
+const COMMON = `Options:
+  --repo <path>        Git repository to check. Default: .
+  --claims <file>      JSON file: [{ "id": "...", "quote": "..." }]. Default: claims.json
+  --out <dir>          Folder for work files, checks and results. Default: results
+  --only <id>          Run one claim id from the claims file
+  --json               Print one JSON report on stdout; human lines go to stderr
+  --json-file <path>   Also write the JSON report to a file
+  -h, --help           Show help`;
+const HELP: Record<string, string> = {
+  prepare: `Usage: claimcheck prepare [options]
+
+Parse each claim and locate candidate lines. Writes <out>/work/<id>/parse.json,
+candidates.json and author.prompt.txt. Edits nothing in the repository.
+
+${COMMON}
+  --model-terms        Add model-suggested search words (needs CLAIMCHECK_MODEL)
+
+Exit codes: 0 done, 2 could not check.
+`,
+  author: `Usage: claimcheck author [options]
+
+Same as prepare, then asks the model named by CLAIMCHECK_MODEL to write
+<out>/work/<id>/answer.json. Needs AI_GATEWAY_API_KEY and CLAIMCHECK_MODEL.
+Without a model, write each answer.json by hand and run execute.
+
+${COMMON}
+  --model-terms        Add model-suggested search words
+
+Exit codes: 0 done, 2 could not check (including no model configured).
+`,
+  execute: `Usage: claimcheck execute [options]
+
+Read <out>/work/<id>/answer.json, run the check on the real code, then on a
+mutant, and decide PROVEN, CONTRADICTED, NO-TEETH, NOT-LOCATED or NOT-CHECKABLE.
+Edits a file in the repository to build the mutant and restores it afterwards.
+Run it on a clean checkout.
+
+${COMMON}
+  --strict             A NOT-LOCATED or NOT-CHECKABLE claim also exits 1
+
+Exit codes: 0 no claim is CONTRADICTED or NO-TEETH, 1 at least one is (or a gap
+with --strict), 2 could not check.
+`,
+};
+const USAGE = `claimcheck: turn a written claim about software into a check, then prove the check has teeth.
+
+Usage: claimcheck <command> [options]
+
+Commands:
+  prepare    Parse each claim and locate candidate lines
+  author     Ask a model to write each answer.json
+  execute    Run each check on the real code and on a mutant, then decide
+
+Run "claimcheck <command> --help" for the options of one command.
+
+Options:
+  -h, --help           Show help
+  -v, --version        Show the version
+
+Exit codes: 0 nothing wrong, 1 a claim looks false (or a gap with --strict), 2 could not check.
+`;
+
 class Usage extends Error {}
 const fail = (msg: string): never => { throw new Usage(msg); };
 
@@ -48,7 +110,7 @@ function isDirty(repo: string, file: string): boolean {
 }
 
 async function run(): Promise<{ report: Record<string, unknown>; exitCode: number }> {
-  if (!cmd || !COMMANDS.includes(cmd)) fail(`unknown command ${JSON.stringify(cmd ?? '')}; use one of: ${COMMANDS.join(', ')}`);
+  if (!cmd || !COMMANDS.includes(cmd)) fail(`unknown command ${JSON.stringify(cmd ?? '')}; use one of: ${COMMANDS.join(', ')}; run claimcheck --help`);
   const repo = resolve(opt('repo') ?? '.');
   const out = resolve(opt('out') ?? 'results');
   const only = opt('only');
@@ -126,6 +188,15 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
 }
 
 async function main() {
+  // help and version answer first and touch nothing else
+  if (cmd === '-h' || cmd === '--help' || cmd === 'help') {
+    const topic = cmd === 'help' ? rest[0] : undefined;
+    process.stdout.write(topic && COMMANDS.includes(topic) ? HELP[topic] : USAGE);
+    return;
+  }
+  if (cmd === '-v' || cmd === '--version') { process.stdout.write(`${version()}\n`); return; }
+  if (cmd && COMMANDS.includes(cmd) && (rest.includes('-h') || rest.includes('--help'))) { process.stdout.write(HELP[cmd]); return; }
+  if (!cmd) { process.stderr.write(`claimcheck: no command given\n\n${USAGE}`); process.exitCode = 2; return; }
   let result: { report: Record<string, unknown>; exitCode: number };
   try {
     result = await run();

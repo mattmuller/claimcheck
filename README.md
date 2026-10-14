@@ -278,6 +278,8 @@ From a clone, run `npm install`, then use `npx tsx src/cli.ts <command> ...` in 
 `npx @mattmuller/claimcheck <command> ...` above. `npm run bench` runs the search benchmark in
 `bench/`; `npm test` runs the tests.
 
+Run `npx @mattmuller/claimcheck --help` for the commands, `<command> --help` for the options of one command, and `--version` for the version.
+
 `prepare` and `author` take `--model-terms` to add model-suggested search words (see above).
 
 `claims.json` is `[{ "id": "...", "quote": "..." }]`. The model is set by `CLAIMCHECK_MODEL`,
@@ -317,7 +319,7 @@ stderr that says what to fix.
 
 ```json
 {
-  "tool": "claimcheck", "version": "0.1.1", "command": "execute", "repo": "/tmp/repo", "exitCode": 1,
+  "tool": "claimcheck", "version": "0.1.2", "command": "execute", "repo": "/tmp/repo", "exitCode": 1,
   "summary": { "PROVEN": 3, "CONTRADICTED": 1, "NO-TEETH": 0, "NOT-LOCATED": 1, "NOT-CHECKABLE": 0, "total": 5 },
   "claims": [
     { "id": "c38", "quote": "Workers send a heartbeat every 5 seconds.", "class": "CONTRADICTED",

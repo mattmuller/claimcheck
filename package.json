@@ -1,6 +1,6 @@
 {
   "name": "@mattmuller/claimcheck",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Turns a written claim about software into an executable check, then proves the check has teeth by breaking the code it relies on.",
   "type": "module",
   "license": "MIT",

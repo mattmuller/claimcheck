@@ -6,6 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-14
+
+### Added
+
+- `claimcheck --help`, `-h` and `help` print the commands and options. `claimcheck <command> --help` prints the options and exit codes of one command, and does nothing else.
+- `claimcheck --version` and `-v` print the version.
+
+### Changed
+
+- An unknown command, or no command, now points you to `claimcheck --help`. The exit code is still 2.
+
 ## [0.1.1] - 2026-10-14
 
 ### Security
@@ -52,6 +63,7 @@ First release. claimcheck checks a written claim about software against the code
 - Includes a benchmark in `bench/` with 38 claims about a made-up service. `npm run bench` reproduces the numbers in the README. (93f5885)
 - Ships as one bundled file, `dist/cli.js`, run with `npx @mattmuller/claimcheck`. (26f62cf)
 
-[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/mattmuller/claimcheck/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/mattmuller/claimcheck/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mattmuller/claimcheck/releases/tag/v0.1.0

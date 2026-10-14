@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -101,5 +101,36 @@ describe('JSON report', () => {
     expect(c.candidates.length).toBeLessThanOrEqual(5);
     expect(c.candidates[0]).toMatchObject({ file: 'src/cache.ts', line: 1 });
     expect(Object.keys(c.candidates[0])).toEqual(expect.arrayContaining(['text', 'why', 'score', 'usedBy']));
+  });
+});
+
+describe('help and version', () => {
+  const pkgVersion = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version;
+  it.each([[[]], [['-h']], [['--help']], [['help']]])('usage for %j lists all three commands', (args) => {
+    const r = cli(args);
+    const text = args.length ? r.stdout : r.stderr;
+    expect(r.status).toBe(args.length ? 0 : 2);
+    for (const c of ['prepare', 'author', 'execute']) expect(text).toContain(c);
+    expect(text).toContain('--version');
+  });
+  it.each(['-v', '--version'])('%s prints the bare version', (f) => {
+    const r = cli([f]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe(`${pkgVersion}\n`);
+  });
+  it.each(['prepare', 'author', 'execute'])('%s --help prints its flags and does not touch the repo', (c) => {
+    const s = setup((r) => ({ a: proven(r) }));
+    const r = cli([c, '--repo', s.repo, '--claims', s.claimsFile, '--out', join(s.out, 'never'), '--help']);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain(`claimcheck ${c}`);
+    expect(r.stdout).toContain('--repo');
+    expect(existsSync(join(s.out, 'never'))).toBe(false);
+    expect(spawnSync('git', ['status', '--porcelain'], { cwd: s.repo, encoding: 'utf8' }).stdout).toBe('');
+  });
+  it('execute help lists --strict', () => expect(cli(['execute', '-h']).stdout).toContain('--strict'));
+  it('unknown command exits 2 and points at --help', () => {
+    const r = cli(['frobnicate']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('run claimcheck --help');
   });
 });
