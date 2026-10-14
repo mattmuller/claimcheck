@@ -1,19 +1,54 @@
 {
-  "name": "claimcheck",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@mattmuller/claimcheck",
+  "version": "0.1.0",
   "description": "Turns a written claim about software into an executable check, then proves the check has teeth by breaking the code it relies on.",
   "type": "module",
   "license": "MIT",
   "author": "Matt Muller <138638+mattmuller@users.noreply.github.com>",
-  "repository": { "type": "git", "url": "git+https://github.com/mattmuller/claimcheck.git" },
-  "engines": { "node": ">=22" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattmuller/claimcheck.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "claimcheck": "tsx src/cli.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "bench": "tsx bench/run.ts"
+    "bench": "tsx bench/run.ts",
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --external:typescript --banner:js='#!/usr/bin/env node' --outfile=dist/cli.js && chmod +x dist/cli.js",
+    "prepublishOnly": "npm run build"
   },
-  "dependencies": { "typescript": "^5.6.0" },
-  "devDependencies": { "@types/node": "^22.0.0", "tsx": "^4.19.0", "vitest": "^2.1.0" }
+  "dependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "vitest": "^2.1.0"
+  },
+  "homepage": "https://github.com/mattmuller/claimcheck",
+  "bugs": "https://github.com/mattmuller/claimcheck/issues",
+  "keywords": [
+    "claims",
+    "verification",
+    "mutation-testing",
+    "ai-agents",
+    "documentation",
+    "testing"
+  ],
+  "bin": {
+    "claimcheck": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

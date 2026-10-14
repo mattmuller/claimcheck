@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { type Target, withMutation } from './mutate';
 
 export type Class = 'PROVEN' | 'CONTRADICTED' | 'NO-TEETH' | 'NOT-LOCATED' | 'NOT-CHECKABLE';
@@ -20,8 +21,15 @@ export interface RunOut {
   output: string;
 }
 
+// claimcheck's own tsx, run with the current node: no npx, no install in the target repo
+function tsxCli(): string {
+  const pkgPath = createRequire(import.meta.url).resolve('tsx/package.json');
+  const bin = JSON.parse(readFileSync(pkgPath, 'utf8')).bin;
+  return join(dirname(pkgPath), typeof bin === 'string' ? bin : bin.tsx);
+}
+
 export function runCheck(repo: string, checkFile: string): RunOut {
-  const r = spawnSync('npx', ['tsx', checkFile], { cwd: repo, encoding: 'utf8', timeout: 120_000 });
+  const r = spawnSync(process.execPath, [tsxCli(), checkFile], { cwd: repo, encoding: 'utf8', timeout: 120_000 });
   const output = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(-2500);
   if (r.status === 0) return { status: 'pass', output };
   // only an AssertionError counts as the claim failing; anything else means the check could not run

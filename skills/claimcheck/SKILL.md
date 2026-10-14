@@ -10,7 +10,7 @@ code does that. The tool finds candidate lines and runs the checks. You, the age
 you choose the line and write the check. The tool then breaks that line on purpose to prove the check
 depends on it.
 
-Run it from the claimcheck folder: `npx tsx src/cli.ts <command> ...`. Below, `CC` stands for that.
+Run it with `npx @mattmuller/claimcheck <command> ...`. Below, `CC` stands for that. (From a clone of the repo, use `npx tsx src/cli.ts <command> ...` instead.)
 
 ## The loop
 
