@@ -156,7 +156,7 @@ database of the code. We looked at the research before building either, and buil
   ([query expansion for code search, 2025](https://www.sciencedirect.com/science/article/abs/pii/S0164121225002511)),
   so we tried it, and kept it only as far as our own measurements supported it (below).
 
-So the search is a ladder. Each rung is cheap, runs in the process, and adds no dependency:
+So the search is a ladder. Each rung is cheap and runs in the process. None needs a server, an index on disk or a package the tool did not already have:
 
 1. **Patterns.** The number in every unit, next to a unit word, in a SQL interval, multiplied by
    unit factors, or beside a setting name. These run as JavaScript regular expressions over the
@@ -171,11 +171,13 @@ So the search is a ladder. Each rung is cheap, runs in the process, and adds no 
    lines that match the claim's words but hold a *different* number: that is how a false claim
    finds the line that proves it false.
 4. **A value map from the TypeScript compiler.** For TypeScript and JavaScript projects, claimcheck
-   asks the compiler (loaded from the target project, so it is not a new dependency) to work out the
+   asks the TypeScript compiler to work out the
    value of each constant: `10 * MINUTE` across an import, a default behind `process.env.X ?? 900`,
    a property of an imported JSON file, a helper such as `minutes(15)`. A value that equals the
    claim's period is reported at the line holding the number a person would change. It also lists
-   where that constant is used, so the check can call the real behaviour.
+   where that constant is used, so the check can call the real behaviour. The compiler is
+   claimcheck's own copy, which it already had for its own build. It only reads the target's files
+   and never loads a module from the target, so preparing a check runs none of the target's code.
 5. **Model-suggested words (off by default).** With `--model-terms`, a model lists words a
    programmer might use for the claim's subject. They count at half weight. On our benchmark they
    did not help, so they are not used unless asked for.

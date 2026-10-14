@@ -32,15 +32,18 @@ const UNIT_NAME_WORDS = new Set(
   'ms milli millis millisecond milliseconds sec secs second seconds min mins minute minutes hr hrs hour hours day days week weeks month months year years per in a an one the of'.split(' '),
 );
 
-export function loadTypeScript(repo: string): typeof TS | null {
-  for (const base of [join(repo, 'package.json'), import.meta.url]) {
-    try {
-      const mod = createRequire(base)('typescript');
-      const t = (mod && mod.default && mod.default.createProgram ? mod.default : mod) as typeof TS;
-      if (t && typeof t.createProgram === 'function') return t;
-    } catch { /* try the next place */ }
+/**
+ * claimcheck's own copy of the compiler. Never the target repository's: requiring a module from a
+ * repository under inspection runs that repository's code, and `prepare` must only read code.
+ */
+export function loadTypeScript(): typeof TS | null {
+  try {
+    const mod = createRequire(import.meta.url)('typescript');
+    const t = (mod && mod.default && mod.default.createProgram ? mod.default : mod) as typeof TS;
+    return t && typeof t.createProgram === 'function' ? t : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 interface Leaf { node: TS.Node; value: number }
@@ -306,7 +309,7 @@ function trackedRoots(repo: string): string[] {
 const clip = (s: string, n = 90) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
 export function graphCandidates(repo: string, periods: Period[]): GraphHit[] {
-  const ts = loadTypeScript(repo);
+  const ts = loadTypeScript();
   if (!ts || periods.length === 0) return [];
   const roots = trackedRoots(repo);
   if (!roots.some((f) => !f.endsWith('.json'))) return [];

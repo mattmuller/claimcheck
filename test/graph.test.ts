@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { graphCandidates } from '../src/graph';
 import { parsePeriods } from '../src/parse';
 import { tempRepo } from './helpers';
@@ -86,5 +89,19 @@ describe('graph: constant folding', () => {
 
   it('returns nothing, quietly, for a repository without code', () => {
     expect(find({ 'a.txt': 'hello\n' }, 'It lasts 15 minutes.')).toEqual([]);
+  });
+});
+
+describe('graph: never runs the inspected repository\'s code', () => {
+  it('ignores a typescript package planted in the target repo', () => {
+    const marker = join(tmpdir(), `claimcheck-planted-${process.pid}-${Date.now()}`);
+    const repo = tempRepo({
+      'src/a.ts': 'export const TTL_MS = 15 * 60_000;\n',
+      'package.json': '{ "name": "target" }\n',
+      'node_modules/typescript/package.json': '{ "name": "typescript", "main": "index.js" }\n',
+      'node_modules/typescript/index.js': `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran'); module.exports = {};\n`,
+    });
+    graphCandidates(repo, parsePeriods('Entries expire after 15 minutes.'));
+    expect(existsSync(marker)).toBe(false);
   });
 });
