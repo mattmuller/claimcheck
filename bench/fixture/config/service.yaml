@@ -1,0 +1,8 @@
+name: example-service
+port: 8080
+shutdown:
+  # How long SIGTERM waits for in-flight requests before the process exits.
+  gracePeriodSeconds: 25
+  forceExitCode: 1
+logging:
+  level: info

@@ -1,0 +1,13 @@
+{
+  "webhooks": {
+    "requestTimeoutSeconds": 10,
+    "maxPayloadKb": 256
+  },
+  "alerts": {
+    "cooldownMinutes": 90,
+    "channel": "ops-alerts"
+  },
+  "features": {
+    "thumbnails": true
+  }
+}

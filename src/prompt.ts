@@ -3,7 +3,9 @@ import type { Period } from './parse';
 
 /** One prompt covers ranking and check-writing. It carries the claim and the located candidates only. */
 export function authorPrompt(claim: string, periods: Period[], cands: Candidate[], checkPath: string): string {
-  const list = cands.map((c, i) => `${i}. ${c.file}:${c.line}  [score ${c.score}; ${c.why}]\n     ${c.text}`).join('\n');
+  const list = cands
+    .map((c, i) => `${i}. ${c.file}:${c.line}  [score ${c.score}; ${c.why}]\n     ${c.text}${c.usedBy?.length ? `\n     used by: ${c.usedBy.join('; ')}` : ''}`)
+    .join('\n');
   return `You verify written claims about software against its source code.
 
 CLAIM:
@@ -20,7 +22,7 @@ Do this in order.
    If none does, answer notLocated. Do not pick a line only because it holds the same number.
    Check that the code means what the claim means, in every part of the claim, not only the number.
 3. Write a small executable check, a TypeScript file run with "npx tsx". It will be saved at ${checkPath}.
-   It must import the located code and call the function that uses the value; prefer behaviour to reading a constant.
+   It must import the located code and call the function that uses the value (candidates list "used by" functions where they are known); prefer behaviour to reading a constant.
    Use node:assert. It must throw an AssertionError when the claim does not hold, exit 0 when it holds,
    and assert every part of the claim that code can show (the number, the unit, what starts the period,
    what happens at the end, who it applies to). If a part of the claim has no matching code, the check must fail on it.

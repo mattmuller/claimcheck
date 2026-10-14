@@ -1,0 +1,338 @@
+[
+  {
+    "id": "c01",
+    "quote": "Application logs are retained for 90 days.",
+    "gold": [
+      "bench/fixture/src/logging/rotation.ts:6"
+    ],
+    "kind": "direct",
+    "note": "Plain constant; but 90 also appears as the alert cooldown (minutes)."
+  },
+  {
+    "id": "c02",
+    "quote": "An upload must complete within 120 seconds.",
+    "gold": [
+      "bench/fixture/src/uploads/uploadHandler.ts:3"
+    ],
+    "kind": "direct",
+    "note": "Number and unit in the identifier; a 20_000 chunk timeout sits nearby."
+  },
+  {
+    "id": "c03",
+    "quote": "Backup verification is abandoned after 45 minutes.",
+    "gold": [
+      "bench/fixture/src/backup/backupJob.ts:5"
+    ],
+    "kind": "direct",
+    "note": "Unit is in the name; the value is used later via * 60 * 1000."
+  },
+  {
+    "id": "c04",
+    "quote": "Connections that sit idle for five minutes are closed.",
+    "gold": [
+      "bench/fixture/src/db/pool.ts:6"
+    ],
+    "kind": "wording",
+    "note": "Claim says five minutes; code says evictIdleAfterSec: 300 (seconds, number word)."
+  },
+  {
+    "id": "c05",
+    "quote": "Webhook deliveries that keep failing are given up on after three days.",
+    "gold": [
+      "bench/fixture/src/webhooks/deliveryQueue.ts:9"
+    ],
+    "kind": "wording",
+    "note": "'given up on' vs abandonAfterDays; 3 is a common number elsewhere (3 s probe timeout)."
+  },
+  {
+    "id": "c06",
+    "quote": "Leftover temporary upload files are removed once they are six hours old.",
+    "gold": [
+      "bench/fixture/src/uploads/tempCleaner.ts:11"
+    ],
+    "kind": "wording",
+    "note": "'removed ... old' vs sweepOlderThanHours; the cleaner interval is a different number (30 min) in the same file."
+  },
+  {
+    "id": "c07",
+    "quote": "A client that exceeds the request limit is locked out for half an hour.",
+    "gold": [
+      "bench/fixture/src/http/rateLimiter.ts:5"
+    ],
+    "kind": "wording",
+    "note": "'locked out' vs PENALTY_BOX; 'half an hour' vs 30 minutes; 30 is also a page size and shard count."
+  },
+  {
+    "id": "c08",
+    "quote": "Rotated log files are gzip-compressed after a week.",
+    "gold": [
+      "bench/fixture/src/logging/rotation.ts:14"
+    ],
+    "kind": "wording",
+    "note": "'a week' vs compressAfterDays: 7; a WEEK constant also exists in util/time.ts."
+  },
+  {
+    "id": "c09",
+    "quote": "The rate limit is counted over a sliding window of 5 minutes.",
+    "gold": [
+      "bench/fixture/src/http/rateLimiter.ts:3"
+    ],
+    "kind": "converted",
+    "note": "Code is 5 * 60 * 1000 with no named unit constant."
+  },
+  {
+    "id": "c10",
+    "quote": "Buffered log lines are written out every 5 seconds.",
+    "gold": [
+      "bench/fixture/src/logging/logger.ts:4"
+    ],
+    "kind": "converted",
+    "note": "Code is 5000 milliseconds."
+  },
+  {
+    "id": "c11",
+    "quote": "Expired cache entries are swept once a minute.",
+    "gold": [
+      "bench/fixture/src/cache/sweeper.ts:4"
+    ],
+    "kind": "converted",
+    "note": "60_000 ms; 'once a minute' has no digit."
+  },
+  {
+    "id": "c12",
+    "quote": "Retries are never spaced more than two hours apart.",
+    "gold": [
+      "bench/fixture/src/jobs/retryPolicy.ts:6"
+    ],
+    "kind": "converted",
+    "note": "7_200_000 ms; no sign of 'two' or 'hours' in the code."
+  },
+  {
+    "id": "c13",
+    "quote": "Cached thumbnails expire after 10 minutes.",
+    "gold": [
+      "bench/fixture/src/cache/thumbnailCache.ts:3"
+    ],
+    "kind": "derived",
+    "note": "10 * MINUTE where MINUTE is defined in util/time.ts."
+  },
+  {
+    "id": "c14",
+    "quote": "Log files are rotated every six hours.",
+    "gold": [
+      "bench/fixture/src/logging/rotation.ts:4"
+    ],
+    "kind": "derived",
+    "note": "6 * HOUR; HOUR defined in another file; number word."
+  },
+  {
+    "id": "c15",
+    "quote": "Reports cover the most recent two weeks of data.",
+    "gold": [
+      "bench/fixture/src/reports/scheduler.ts:5"
+    ],
+    "kind": "derived",
+    "note": "2 * WEEK; WEEK is 7 * DAY across a file boundary; claim's unit is weeks."
+  },
+  {
+    "id": "c16",
+    "quote": "The service health check runs every 30 seconds.",
+    "gold": [
+      "bench/fixture/src/health/healthCheck.ts:5"
+    ],
+    "kind": "derived",
+    "note": "30 * SECOND; 30 is also a page size, shard count and 30 minutes elsewhere."
+  },
+  {
+    "id": "c17",
+    "quote": "The first webhook retry happens roughly ten seconds after a failure.",
+    "gold": [
+      "bench/fixture/src/jobs/retryPolicy.ts:4"
+    ],
+    "kind": "derived",
+    "note": "BASE_DELAY_MS = 10 * SECOND; claim never says delay or backoff; the 10 seconds is also the webhook request timeout in config."
+  },
+  {
+    "id": "c18",
+    "quote": "Outgoing webhook requests time out after 10 seconds.",
+    "gold": [
+      "bench/fixture/config/default.json:3"
+    ],
+    "kind": "config",
+    "note": "Value lives in JSON as requestTimeoutSeconds and is read in deliveryQueue.ts; the retry base delay is also 10 seconds."
+  },
+  {
+    "id": "c19",
+    "quote": "On shutdown, the service waits up to 25 seconds for in-flight requests.",
+    "gold": [
+      "bench/fixture/config/service.yaml:5"
+    ],
+    "kind": "config",
+    "note": "Value in YAML; code only reads loadConfig().shutdown.gracePeriodSeconds."
+  },
+  {
+    "id": "c20",
+    "quote": "Reports that run longer than 20 minutes are stopped.",
+    "gold": [
+      "bench/fixture/config/.env.example:5"
+    ],
+    "kind": "config",
+    "note": "Only value is in .env.example; scheduler.ts has no default and reads the env var."
+  },
+  {
+    "id": "c21",
+    "quote": "Once an alert has fired, the same alert is muted for 90 minutes.",
+    "gold": [
+      "bench/fixture/config/default.json:7"
+    ],
+    "kind": "config",
+    "note": "cooldownMinutes in JSON; 90 also appears as log retention days."
+  },
+  {
+    "id": "c22",
+    "quote": "Signed upload links stop working after fifteen minutes.",
+    "gold": [
+      "bench/fixture/src/uploads/uploadHandler.ts:8"
+    ],
+    "kind": "env-default",
+    "note": "Default 900 seconds in code; .env.example repeats 900 as an example only. 15 minutes also the job lease."
+  },
+  {
+    "id": "c23",
+    "quote": "Opening a database connection is given up on after 4 seconds.",
+    "gold": [
+      "bench/fixture/src/db/pool.ts:9"
+    ],
+    "kind": "env-default",
+    "note": "Number(process.env.X ?? 4000) in ms; .env.example repeats it as an example only."
+  },
+  {
+    "id": "c24",
+    "quote": "A failed report is retried after 8 minutes.",
+    "gold": [
+      "bench/fixture/src/reports/scheduler.ts:9"
+    ],
+    "kind": "env-default",
+    "note": "Default is a string '8' passed to parseInt; unit only in the name (_MIN)."
+  },
+  {
+    "id": "c25",
+    "quote": "Events older than 180 days are purged.",
+    "gold": [
+      "bench/fixture/db/migrations/002_schedule_maintenance.sql:5"
+    ],
+    "kind": "sql",
+    "note": "Interval inside a $$ SQL string within a cron.schedule call."
+  },
+  {
+    "id": "c26",
+    "quote": "The event purge runs every night at 3 a.m.",
+    "gold": [
+      "bench/fixture/db/migrations/002_schedule_maintenance.sql:4"
+    ],
+    "kind": "sql",
+    "note": "Value is the cron expression '0 3 * * *'; no time unit appears in the code."
+  },
+  {
+    "id": "c27",
+    "quote": "De-duplication keys are valid for 48 hours.",
+    "gold": [
+      "bench/fixture/db/migrations/001_create_events.sql:14"
+    ],
+    "kind": "sql",
+    "note": "Column default interval; the table is named request_keys."
+  },
+  {
+    "id": "c28",
+    "quote": "Jobs stuck in a claimed state are requeued every 10 minutes.",
+    "gold": [
+      "bench/fixture/db/migrations/002_schedule_maintenance.sql:10"
+    ],
+    "kind": "sql",
+    "note": "Schedule is '*/10 * * * *'; the same statement has an unrelated '1 hour' threshold on line 11; the TS lease is 15 minutes."
+  },
+  {
+    "id": "c29",
+    "quote": "Nightly backups are kept for 30 days.",
+    "gold": [
+      "bench/fixture/src/backup/backupJob.ts:4"
+    ],
+    "kind": "distractor",
+    "note": "30 is also SHARD_COUNT, a page size, 30 minutes (cleaner, penalty box), 30 seconds (health check)."
+  },
+  {
+    "id": "c30",
+    "quote": "A worker that has claimed a job has 15 minutes to finish it before the job is handed to someone else.",
+    "gold": [
+      "bench/fixture/src/jobs/queue.ts:4"
+    ],
+    "kind": "distractor",
+    "note": "15 minutes also appears as 900 seconds for signed upload links."
+  },
+  {
+    "id": "c31",
+    "quote": "Webhook payloads are stored for 7 days.",
+    "gold": [
+      "bench/fixture/src/webhooks/deliveryQueue.ts:5"
+    ],
+    "kind": "distractor",
+    "note": "7 is also compressAfterDays and WEEK; the abandon window is 3 days in the same file."
+  },
+  {
+    "id": "c32",
+    "quote": "A health probe that takes longer than 3 seconds counts as failed.",
+    "gold": [
+      "bench/fixture/src/health/healthCheck.ts:6"
+    ],
+    "kind": "distractor",
+    "note": "3000 ms; 3 also is abandonAfterDays; interval in the same file is 30 s."
+  },
+  {
+    "id": "c33",
+    "quote": "Cached thumbnails are regenerated every 12 hours.",
+    "gold": [],
+    "kind": "absent",
+    "note": "Thumbnails have a TTL but are never regenerated on a schedule."
+  },
+  {
+    "id": "c34",
+    "quote": "Uploaded files are virus-scanned within 30 seconds of arrival.",
+    "gold": [],
+    "kind": "absent",
+    "note": "No scanning exists; plenty of 30s lie around as bait."
+  },
+  {
+    "id": "c35",
+    "quote": "Webhook signing secrets are rotated every 60 days.",
+    "gold": [],
+    "kind": "absent",
+    "note": "No signing or secret rotation; 'rotate' exists only for logs."
+  },
+  {
+    "id": "c36",
+    "quote": "Each upload chunk must arrive within 60 seconds of the previous one.",
+    "gold": [
+      "bench/fixture/src/uploads/uploadHandler.ts:4"
+    ],
+    "kind": "wrong",
+    "note": "Code says 20_000 ms (20 s), so the claim is false; 120 s total timeout is nearby."
+  },
+  {
+    "id": "c37",
+    "quote": "The temporary file cleaner runs once an hour.",
+    "gold": [
+      "bench/fixture/src/uploads/tempCleaner.ts:7"
+    ],
+    "kind": "wrong",
+    "note": "Code runs every 30 minutes; 6 hours in the same file is the age cutoff."
+  },
+  {
+    "id": "c38",
+    "quote": "Workers send a heartbeat every 5 seconds.",
+    "gold": [
+      "bench/fixture/src/jobs/queue.ts:5"
+    ],
+    "kind": "wrong",
+    "note": "Code is 20 * SECOND; 5 seconds is the log flush interval elsewhere."
+  }
+]

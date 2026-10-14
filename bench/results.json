@@ -1,0 +1,740 @@
+{
+ "claims": 38,
+ "scored": 35,
+ "noPeriod": 2,
+ "noPeriodWithGold": 2,
+ "results": {
+  "original (git grep)": {
+   "overall": {
+    "n": 35,
+    "hit1": 2,
+    "hit5": 2,
+    "hit10": 2,
+    "mrr": 2
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "config": {
+     "n": 4,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 2
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    }
+   },
+   "ms": 2451
+  },
+  "original (regex fixed)": {
+   "overall": {
+    "n": 35,
+    "hit1": 17,
+    "hit5": 22,
+    "hit10": 22,
+    "mrr": 19.333333333333332
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 0,
+     "hit5": 1,
+     "hit10": 1,
+     "mrr": 0.5
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.3333333333333335
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 4,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 4.5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 2
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 1
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 2
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    }
+   },
+   "ms": 2148
+  },
+  "rules": {
+   "overall": {
+    "n": 35,
+    "hit1": 18,
+    "hit5": 24,
+    "hit10": 24,
+    "mrr": 20.833333333333332
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 0,
+     "hit5": 1,
+     "hit10": 1,
+     "mrr": 0.5
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.3333333333333335
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 4,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 4.5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 1
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 2,
+     "hit10": 2,
+     "mrr": 2
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 0,
+     "hit10": 0,
+     "mrr": 0
+    }
+   },
+   "ms": 19
+  },
+  "+synonyms+bm25": {
+   "overall": {
+    "n": 35,
+    "hit1": 25,
+    "hit5": 35,
+    "hit10": 35,
+    "mrr": 28.93333333333333
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 1,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 2.533333333333333
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 5,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 4,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 4
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 2,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 2.5
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 2.4000000000000004
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 4,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 4
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 1,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 2
+    }
+   },
+   "ms": 147
+  },
+  "+graph": {
+   "overall": {
+    "n": 35,
+    "hit1": 26,
+    "hit5": 35,
+    "hit10": 35,
+    "mrr": 29.43333333333333
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 2,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 3.2
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 5,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 2.4000000000000004
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 4,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 4
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 1,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 1.8333333333333333
+    }
+   },
+   "ms": 1194
+  },
+  "+model terms": {
+   "overall": {
+    "n": 35,
+    "hit1": 26,
+    "hit5": 34,
+    "hit10": 35,
+    "mrr": 29.259523809523806
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 2,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 3.25
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 5,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 3,
+     "hit10": 4,
+     "mrr": 2.342857142857143
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 4,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 4
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 1,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 1.6666666666666665
+    }
+   },
+   "ms": 938
+  }
+ },
+ "perClaim": {
+  "c01": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c02": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c03": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c04": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c05": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 3,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c06": {
+   "original (git grep)": null,
+   "original (regex fixed)": 2,
+   "rules": 2,
+   "+synonyms+bm25": 2,
+   "+graph": 2,
+   "+model terms": 2
+  },
+  "c07": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 2,
+   "+graph": 2,
+   "+model terms": 2
+  },
+  "c08": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 5,
+   "+graph": 5,
+   "+model terms": 4
+  },
+  "c09": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c10": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c11": {
+   "original (git grep)": null,
+   "original (regex fixed)": 3,
+   "rules": 3,
+   "+synonyms+bm25": 2,
+   "+graph": 2,
+   "+model terms": 2
+  },
+  "c12": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c13": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c14": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c15": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c16": {
+   "original (git grep)": null,
+   "original (regex fixed)": 2,
+   "rules": 2,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c17": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c18": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": 2,
+   "+synonyms+bm25": 1,
+   "+graph": 2,
+   "+model terms": 2
+  },
+  "c19": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c20": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c21": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c22": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c23": {
+   "original (git grep)": null,
+   "original (regex fixed)": 2,
+   "rules": 2,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c24": {
+   "original (git grep)": null,
+   "original (regex fixed)": 2,
+   "rules": 2,
+   "+synonyms+bm25": 2,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c25": {
+   "original (git grep)": 1,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c26": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 5,
+   "+graph": 5,
+   "+model terms": 5
+  },
+  "c27": {
+   "original (git grep)": 1,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c28": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 5,
+   "+graph": 5,
+   "+model terms": 7
+  },
+  "c29": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c30": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c31": {
+   "original (git grep)": null,
+   "original (regex fixed)": 1,
+   "rules": 1,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c32": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  },
+  "c36": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 2,
+   "+graph": 3,
+   "+model terms": 3
+  },
+  "c37": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 2,
+   "+graph": 2,
+   "+model terms": 3
+  },
+  "c38": {
+   "original (git grep)": null,
+   "original (regex fixed)": null,
+   "rules": null,
+   "+synonyms+bm25": 1,
+   "+graph": 1,
+   "+model terms": 1
+  }
+ }
+}
