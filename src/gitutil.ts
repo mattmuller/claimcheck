@@ -4,17 +4,27 @@
 // working-tree file: it compares raw bytes with the index blob (unchanged()) and restores saved bytes itself.
 import { spawnSync } from 'node:child_process';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 
-export const GIT_HARDEN = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null'];
+// --literal-pathspecs: a target such as `src/*.ts` or `:(glob)x` names exactly that file, never a pattern.
+export const GIT_HARDEN = ['--literal-pathspecs', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null'];
 
-export function gitArgs(args: string[]): string[] {
-  const extra = args[0] === 'diff' ? ['--no-ext-diff', '--no-textconv'] : [];
-  return [...GIT_HARDEN, ...(extra.length ? [args[0], ...extra, ...args.slice(1)] : args)];
+/** True when `child` is strictly below `root`, judged with path.relative (never a string prefix). */
+export function isInside(root: string, child: string): boolean {
+  const r = relative(root, child);
+  return r !== '' && r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r);
 }
 
-export function git(repo: string, args: string[], opts: { maxBuffer?: number } = {}) {
-  return spawnSync('git', gitArgs(args), { cwd: repo, encoding: 'utf8', ...opts });
+/** `magic: true` is only for claimcheck's own EXCLUDE list (`:!glob` pathspecs). Never pass a target-supplied path with it. */
+export function gitArgs(args: string[], magic = false): string[] {
+  const harden = magic ? GIT_HARDEN.filter((a) => a !== '--literal-pathspecs') : GIT_HARDEN;
+  const extra = args[0] === 'diff' ? ['--no-ext-diff', '--no-textconv'] : [];
+  return [...harden, ...(extra.length ? [args[0], ...extra, ...args.slice(1)] : args)];
+}
+
+export function git(repo: string, args: string[], opts: { maxBuffer?: number; magic?: boolean } = {}) {
+  const { magic, ...rest } = opts;
+  return spawnSync('git', gitArgs(args, magic), { cwd: repo, encoding: 'utf8', ...rest });
 }
 
 /** True for a regular file that is not a symlink and whose real path stays inside the repository. */
@@ -24,7 +34,7 @@ export function isSafeRegularFile(repo: string, file: string): boolean {
     const st = lstatSync(p);
     if (st.isSymbolicLink() || !st.isFile()) return false;
     const root = realpathSync(repo);
-    return realpathSync(p).startsWith(root + sep);
+    return isInside(root, realpathSync(p));
   } catch {
     return false;
   }
@@ -41,6 +51,11 @@ export function unchanged(repo: string, file: string): boolean {
   const indexSha = staged[0].split(/\s+/)[1];
   const worktree = git(repo, ['hash-object', '--no-filters', '--', file]);
   return worktree.status === 0 && worktree.stdout.trim() === indexSha;
+}
+
+/** Why `unchanged` said no. Names the likely causes so nobody has to guess. */
+export function differsMessage(file: string): string {
+  return `${file} differs from the git index byte-for-byte; refusing to mutate. Likely causes: uncommitted edits, line-ending conversion (such as core.autocrlf on Windows), or a clean/smudge filter. Commit the file, or use a fresh checkout whose working files match the index exactly (on Windows: git config core.autocrlf false before cloning).`;
 }
 
 /** The working-tree bytes of a file, read once so they can be written back exactly. */

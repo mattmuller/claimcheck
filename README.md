@@ -13,7 +13,7 @@
 - **Skill.** `skills/claimcheck/SKILL.md` teaches an agent the whole loop. The agent is the model, so no API key is needed.
 - **Exit codes.** `execute` returns 0 when no claim is CONTRADICTED or NO-TEETH, 1 when at least one is, and 2 when it could not check. See [Exit codes and JSON](#exit-codes-and-json).
 - **JSON.** Add `--json` to get one JSON object on stdout. Human lines go to stderr.
-- **Safety rule.** `execute` edits one line of one file in the target repository and writes the original bytes back afterwards. It refuses a file with uncommitted changes. Run it on a clean checkout.
+- **Safety rule.** `execute` edits one line of one file in the target repository and writes the original bytes back afterwards. It refuses a file that differs from the git index in any byte. Run it on a clean checkout (on Windows, `git config core.autocrlf false` and a fresh checkout, because `core.autocrlf=true` rewrites line endings and the file no longer matches).
 
 READMEs, runbooks, comments and design notes make claims about how code behaves: "cache entries
 expire after 10 minutes", "a request times out after 30 seconds", "log files rotate every 7 days",
@@ -291,6 +291,14 @@ the folder `skills/claimcheck` into the agent's skills directory.
 `execute` edits files in the target repository to build mutants and writes the original
 bytes back afterwards. Run it on a clean checkout you do not mind being touched.
 
+The working file must match the git index byte-for-byte. Uncommitted edits, line-ending
+conversion (`core.autocrlf=true` on Windows) and clean/smudge filters all make it differ, and
+`execute` then refuses. On Windows run `git config core.autocrlf false` and check out again.
+
+A check is not sandboxed: it is code (often written by a model that read the target repository)
+running as you. For a repository you do not trust, run claimcheck in a container or as a throwaway
+user. See [SECURITY.md](SECURITY.md).
+
 ## Exit codes and JSON
 
 Exit codes follow the pytest convention. A script or CI job can read them directly.
@@ -299,7 +307,7 @@ Exit codes follow the pytest convention. A script or CI job can read them direct
 |---|---|---|
 | 0 | No claim is CONTRADICTED or NO-TEETH. | Done. |
 | 1 | At least one claim is CONTRADICTED or NO-TEETH. With `--strict`, a NOT-LOCATED or NOT-CHECKABLE claim also gives 1. | Not used. |
-| 2 | Could not check: bad arguments, unknown command, missing or invalid claims file, `--repo` not a git repository, target file has uncommitted changes, or a crash. | Same. `author` also gives 2 when no model is configured or a call fails. |
+| 2 | Could not check: bad arguments, unknown command, missing or invalid claims file, `--repo` not a git repository, target file differs from the git index, or a crash. | Same. `author` also gives 2 when no model is configured or a call fails. |
 
 A claim with no `answer.json` yet is reported as NOT-CHECKABLE. Code 2 always prints one line on
 stderr that says what to fix.

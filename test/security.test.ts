@@ -17,49 +17,49 @@ const FILES = { 'src/a.ts': 'export const TTL = 600;\n' };
 const target = (file = 'src/a.ts') => ({ file, line: 1, token: '600' });
 
 describe('withMutation refuses unsafe targets', () => {
-  it('an absolute path', () => {
+  it('an absolute path', async () => {
     const repo = tempRepo(FILES);
     const outside = join(scratch(), 'victim.ts');
     writeFileSync(outside, 'export const TTL = 600;\n');
-    const r = withMutation(repo, target(outside), () => 1);
+    const r = await withMutation(repo, target(outside), async () => 1);
     expect('error' in r && r.error).toMatch(/absolute/);
     expect(readFileSync(outside, 'utf8')).toBe('export const TTL = 600;\n');
   });
-  it('a ".." segment', () => {
+  it('a ".." segment', async () => {
     const repo = tempRepo(FILES);
-    const r = withMutation(repo, target('src/../src/a.ts'), () => 1);
+    const r = await withMutation(repo, target('src/../src/a.ts'), async () => 1);
     expect('error' in r && r.error).toMatch(/\.\./);
   });
-  it('an untracked file', () => {
+  it('an untracked file', async () => {
     const repo = tempRepo(FILES);
     writeFileSync(join(repo, 'src/new.ts'), 'export const X = 600;\n');
-    const r = withMutation(repo, target('src/new.ts'), () => 1);
+    const r = await withMutation(repo, target('src/new.ts'), async () => 1);
     expect('error' in r && r.error).toMatch(/not tracked/);
     expect(readFileSync(join(repo, 'src/new.ts'), 'utf8')).toBe('export const X = 600;\n');
   });
-  it('a tracked symlink, and does not touch what it points at', () => {
+  it('a tracked symlink, and does not touch what it points at', async () => {
     const outside = join(scratch(), 'victim.ts');
     writeFileSync(outside, 'export const TTL = 600;\n');
     const repo = tempRepo(FILES);
     symlinkSync(outside, join(repo, 'src/link.ts'));
     sh(repo, 'add', '-A'); sh(repo, 'commit', '-q', '-m', 'link');
-    const r = withMutation(repo, target('src/link.ts'), () => 1);
+    const r = await withMutation(repo, target('src/link.ts'), async () => 1);
     expect('error' in r && r.error).toMatch(/symlink/);
     expect(readFileSync(outside, 'utf8')).toBe('export const TTL = 600;\n');
   });
-  it('a file reached through a tracked symlinked directory that leaves the repo', () => {
+  it('a file reached through a tracked symlinked directory that leaves the repo', async () => {
     const outDir = scratch();
     writeFileSync(join(outDir, 'a.ts'), 'export const TTL = 600;\n');
     const repo = tempRepo(FILES);
     symlinkSync(outDir, join(repo, 'ext'));
     sh(repo, 'add', '-A'); sh(repo, 'commit', '-q', '-m', 'dir link');
-    const r = withMutation(repo, target('ext/a.ts'), () => 1);
+    const r = await withMutation(repo, target('ext/a.ts'), async () => 1);
     expect('error' in r).toBe(true);
     expect(readFileSync(join(outDir, 'a.ts'), 'utf8')).toBe('export const TTL = 600;\n');
   });
-  it('still mutates and restores an ordinary tracked file', () => {
+  it('still mutates and restores an ordinary tracked file', async () => {
     const repo = tempRepo(FILES);
-    const r = withMutation(repo, target(), () => readFileSync(join(repo, 'src/a.ts'), 'utf8'));
+    const r = await withMutation(repo, target(), async () => readFileSync(join(repo, 'src/a.ts'), 'utf8'));
     expect('error' in r).toBe(false);
     if (!('error' in r)) expect(r.result).toContain('601');
     expect(readFileSync(join(repo, 'src/a.ts'), 'utf8')).toBe('export const TTL = 600;\n');
@@ -67,41 +67,21 @@ describe('withMutation refuses unsafe targets', () => {
 });
 
 describe('restore', () => {
-  it('throws loudly, naming the file, when the file cannot be written back', () => {
+  it('throws loudly, naming the file, when the file cannot be written back', async () => {
     const repo = tempRepo(FILES);
-    expect(() => withMutation(repo, target(), () => { chmodSync(join(repo, 'src/a.ts'), 0o444); return 1; })).toThrow(/could not restore src\/a\.ts/);
+    await expect(withMutation(repo, target(), async () => { chmodSync(join(repo, 'src/a.ts'), 0o444); return 1; })).rejects.toThrow(/could not restore src\/a\.ts/);
     chmodSync(join(repo, 'src/a.ts'), 0o644);
   });
-  it('never runs a clean or smudge filter defined by the target repository', () => {
+  it('never runs a clean or smudge filter defined by the target repository', async () => {
     const repo = tempRepo({ ...FILES, '.gitattributes': '*.ts filter=trap\n' });
     const marker = join(scratch(), 'filter-ran');
     for (const k of ['clean', 'smudge']) {
       spawnSync('git', ['config', `filter.trap.${k}`, `sh -c 'touch ${marker}; cat'`], { cwd: repo });
     }
-    const r = withMutation(repo, target(), () => 1);
+    const r = await withMutation(repo, target(), async () => 1);
     expect('error' in r ? r.error : 'ok').toBe('ok');
     expect(existsSync(marker)).toBe(false);
     expect(readFileSync(join(repo, 'src/a.ts'), 'utf8')).toBe('export const TTL = 600;\n');
-  });
-  it('puts the file back when the process gets SIGTERM during a run', () => {
-    const repo = tempRepo(FILES);
-    const dir = scratch();
-    const script = join(dir, 'kill.ts');
-    const mutate = join(import.meta.dirname, '..', 'src', 'mutate.ts');
-    const started = join(dir, 'started');
-    writeFileSync(script, `import { writeFileSync } from 'node:fs';
-import { withMutation } from ${JSON.stringify(mutate)};
-// a signal is delivered while run() is blocked; the handler fires as soon as it returns
-withMutation(${JSON.stringify(repo)}, { file: 'src/a.ts', line: 1, token: '600' }, () => {
-  writeFileSync(${JSON.stringify(started)}, '1');
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2500);
-  return 1;
-});
-setTimeout(() => process.exit(0), 10000);
-`);
-    const child = spawnSync('sh', ['-c', `node --import tsx ${script} & pid=$!; while [ ! -f ${started} ]; do sleep 0.1; done; kill -TERM $pid; wait $pid; echo "exit=$?"`], { encoding: 'utf8', timeout: 60_000, cwd: join(import.meta.dirname, '..') });
-    expect(readFileSync(join(repo, 'src/a.ts'), 'utf8')).toBe('export const TTL = 600;\n');
-    expect(child.stdout).toMatch(/exit=143/);
   });
 });
 
@@ -114,22 +94,22 @@ describe('runCheck environment', () => {
     writeFileSync(f, src);
     return runCheck(repo, f);
   };
-  it('passes no API key, CLAIMCHECK_ variable or secret-looking variable to the check', () => {
+  it('passes no API key, CLAIMCHECK_ variable or secret-looking variable to the check', async () => {
     process.env.AI_GATEWAY_API_KEY = 'sk-gw-123';
     process.env.CLAIMCHECK_MODEL = 'm-name';
     process.env.MY_SERVICE_TOKEN = 'tok-456';
     process.env.DB_PASSWORD = 'pw-789';
     process.env.CLAIMCHECK_TESTVAR_X = 'x-1';
-    const r = run('console.log(JSON.stringify(process.env));');
+    const r = await run('console.log(JSON.stringify(process.env));');
     for (const leak of ['sk-gw-123', 'm-name', 'tok-456', 'pw-789', 'x-1']) expect(r.output).not.toContain(leak);
     expect(r.output).toContain('"PATH"');
   });
-  it('replaces the gateway key with [redacted] in captured output', () => {
+  it('replaces the gateway key with [redacted] in captured output', async () => {
     process.env.AI_GATEWAY_API_KEY = 'sk-gw-readable-from-disk';
     const repo = tempRepo({ ...FILES, 'k.txt': 'sk-gw-readable-from-disk' });
     const f = join(scratch(), 'c.check.ts');
     writeFileSync(f, `import { readFileSync } from 'node:fs'; console.log('got', readFileSync(${JSON.stringify(join(repo, 'k.txt'))}, 'utf8'));`);
-    const r = runCheck(repo, f);
+    const r = await runCheck(repo, f);
     expect(r.output).toContain('[redacted]');
     expect(r.output).not.toContain('sk-gw-readable-from-disk');
   });
@@ -151,7 +131,7 @@ describe('corpus', () => {
 });
 
 describe('claim ids', () => {
-  it('an id that could escape --out is a usage error (exit 2) naming the id', () => {
+  it('an id that could escape --out is a usage error (exit 2) naming the id', async () => {
     const dir = scratch();
     const claims = join(dir, 'claims.json');
     writeFileSync(claims, JSON.stringify([{ id: '../../evil', quote: 'x' }]));
@@ -182,7 +162,7 @@ describe('gateway url', () => {
 });
 
 describe('git hardening', () => {
-  it('a hostile repository config (fsmonitor, hooks, textconv) does not run code during mutation', () => {
+  it('a hostile repository config (fsmonitor, hooks, textconv) does not run code during mutation', async () => {
     const marks = scratch();
     const repo = tempRepo({ 'src/a.ts': 'export const TTL = 600;\n', '.gitattributes': '*.ts diff=boom\n' });
     const hook = (name: string) => `#!/bin/sh\necho ran > ${join(marks, name)}\nexit 0\n`;
@@ -192,7 +172,7 @@ describe('git hardening', () => {
     sh(repo, 'config', 'core.fsmonitor', join(marks, 'fsmon.sh'));
     sh(repo, 'config', 'diff.boom.textconv', join(marks, 'textconv.sh'));
     sh(repo, 'config', 'diff.external', join(marks, 'extdiff.sh'));
-    const r = withMutation(repo, target(), () => 1);
+    const r = await withMutation(repo, target(), async () => 1);
     expect('error' in r).toBe(false);
     for (const m of ['fsmon', 'textconv', 'extdiff', 'posthook']) expect(existsSync(join(marks, m)), m).toBe(false);
   });

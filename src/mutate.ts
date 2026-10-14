@@ -1,7 +1,8 @@
 // Stage 4 helper: mutate exactly one token on one line, run, restore with git.
-import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, sep } from 'node:path';
-import { git, readBytes, unchanged } from './gitutil';
+import { lstatSync, realpathSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
+import { differsMessage, git, isInside, readBytes, unchanged } from './gitutil';
+import { killAll } from './procs';
 
 export interface Target {
   file: string;
@@ -36,15 +37,27 @@ export function refuseTarget(repo: string, file: string): string | null {
   if (!st.isFile()) return `${file} is not a regular file; refusing to mutate`;
   try {
     const root = realpathSync(repo);
-    if (!realpathSync(join(repo, file)).startsWith(root + sep)) return `${file} resolves outside the repository; refusing to mutate`;
+    if (!isInside(root, realpathSync(join(repo, file)))) return `${file} resolves outside the repository; refusing to mutate`;
   } catch { return `${file} cannot be resolved inside the repository; refusing to mutate`; }
   return null;
 }
 
 function restore(repo: string, file: string, original: Buffer): void {
+  const path = join(repo, file);
+  // A check may have swapped the file for a symlink. Never write through one.
+  let st;
+  try { st = lstatSync(path); } catch { st = null; }
+  if (!st || st.isSymbolicLink() || !st.isFile()) {
+    throw new Error(`claimcheck refuses to restore ${file}: it is no longer a regular file (a check replaced or removed it). The file in ${repo} may be MUTATED or gone. Inspect it with: git -C ${repo} status -- ${file}`);
+  }
+  try {
+    if (!isInside(realpathSync(repo), realpathSync(path))) throw new Error('it now resolves outside the repository');
+  } catch (e) {
+    throw new Error(`claimcheck refuses to restore ${file}: ${(e as Error).message}. The file in ${repo} may still be MUTATED.`);
+  }
   // Write the saved bytes back ourselves: `git checkout` would run the target's smudge filter.
   try {
-    writeFileSync(join(repo, file), original);
+    writeFileSync(path, original);
   } catch (e) {
     throw new Error(`claimcheck could not restore ${file} (${(e as Error).message}). The file in ${repo} is still MUTATED. Restore it with: git -C ${repo} checkout -- ${file}`);
   }
@@ -53,35 +66,36 @@ function restore(repo: string, file: string, original: Buffer): void {
   }
 }
 
-export function withMutation<T>(repo: string, t: Target, run: () => T): { diff: string; result: T } | { error: string } {
+const SIGNALS: [NodeJS.Signals, number][] = [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129], ['SIGQUIT', 131]];
+
+export async function withMutation<T>(repo: string, t: Target, run: () => Promise<T>): Promise<{ diff: string; result: T } | { error: string }> {
   const refused = refuseTarget(repo, t.file);
   if (refused) return { error: refused };
   const path = join(repo, t.file);
-  if (!unchanged(repo, t.file)) return { error: `${t.file} has uncommitted changes; refusing to mutate` };
+  if (!unchanged(repo, t.file)) return { error: differsMessage(t.file) };
   const original = readBytes(repo, t.file);
   const lines = original.toString('utf8').split('\n');
   const m = lines[t.line - 1] === undefined ? null : mutatedLine(lines[t.line - 1], t.token);
   if (!m) return { error: `token ${JSON.stringify(t.token)} not found (or has no number) on ${t.file}:${t.line}` };
   lines[t.line - 1] = m.after;
-  // Ctrl-C or a kill must not leave the target edited. The handler runs once the blocking run() returns.
-  const onSignal = (sig: NodeJS.Signals) => {
-    try { restore(repo, t.file, original); } catch (e) { console.error(`claimcheck: ${(e as Error).message}`); }
-    process.exit(sig === 'SIGINT' ? 130 : 143);
-  };
-  const onInt = () => onSignal('SIGINT');
-  const onTerm = () => onSignal('SIGTERM');
-  process.on('SIGINT', onInt);
-  process.on('SIGTERM', onTerm);
+  // A stop signal ends the running check (whole process group) first, then restores, then exits. SIGKILL cannot be caught.
+  const handlers = SIGNALS.map(([sig, code]) => {
+    const h = () => {
+      killAll();
+      try { restore(repo, t.file, original); } catch (e) { console.error(`claimcheck: ${(e as Error).message}`); }
+      process.exit(code);
+    };
+    process.on(sig, h);
+    return [sig, h] as const;
+  });
   writeFileSync(path, lines.join('\n'));
   try {
     // Our own one-line diff: `git diff` would run the target's clean filter.
     const diff = `--- a/${t.file}\n+++ b/${t.file}\n@@ -${t.line} +${t.line} @@\n-${m.before}\n+${m.after}\n`;
-    return { diff, result: run() };
+    return { diff, result: await run() };
   } finally {
-    try { restore(repo, t.file, original); } finally {
-      // A signal that arrived while run() blocked is delivered on the next loop turn. Keep the handlers
-      // briefly, or the signal is swallowed and the process carries on.
-      setTimeout(() => { process.off('SIGINT', onInt); process.off('SIGTERM', onTerm); }, 100).unref();
+    try { killAll(); restore(repo, t.file, original); } finally {
+      for (const [sig, h] of handlers) process.off(sig, h);
     }
   }
 }

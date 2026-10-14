@@ -44,6 +44,6 @@ Only a maintainer releases. The steps are:
 1. Bump `version` in `package.json` (run `npm version <x.y.z> --no-git-tag-version`).
 2. Move the "Unreleased" entries in `CHANGELOG.md` under a new `## [x.y.z] - date` heading. Update the links at the bottom.
 3. Commit and merge to `main`.
-4. Tag the commit `vX.Y.Z` and push the tag.
+4. Tag the commit `vX.Y.Z` and push the tag. The tagged commit must be on `main`.
 
-The release workflow does the rest. It checks that the tag equals the package version, runs the tests, builds, publishes to npm with provenance, and creates the GitHub release from that version's changelog section. The workflow uses npm trusted publishing, so no npm token is stored.
+The release workflow has two jobs. `verify` has read-only permission. It checks that the tag equals the package version, that the tagged commit is an ancestor of `origin/main`, and that `CHANGELOG.md` has a section for the version. It then runs `npm ci`, the type check, the tests, the build, and the benchmark with `compare-bench`. `publish` runs only when `verify` passes. It alone has `id-token: write` and `contents: write`. It installs with `npm ci --ignore-scripts`, builds, publishes to npm with provenance, and creates the GitHub release from the changelog section. The workflow uses npm trusted publishing, so no npm token is stored.

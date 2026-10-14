@@ -29,7 +29,7 @@ Set `REPO` (the project to inspect), `OUT` (a scratch folder outside REPO) and `
    that uses the value. Assert with `node:assert`. Run it yourself with `npx tsx <file>` from REPO. Save a copy at `$OUT/checks/<id>.check.ts`; `execute` writes the same file from `checkSource`.
 5. **Name the token**: the exact text on that line that carries the value, such as `600` or `'14 days'`.
 6. **Write `$OUT/work/<id>/answer.json`** (shape below).
-7. **Commit REPO**. `execute` refuses to mutate a file with uncommitted changes.
+7. **Commit REPO**. `execute` refuses a file that differs from the git index in any byte.
 8. **Execute**: `CC execute --repo $REPO --claims $CLAIMS --out $OUT --json`. Read the verdicts.
 9. **Report** each claim: id, verdict, the located `file:line`, and the reason. For CONTRADICTED, say
    what the code does instead (read `realRun.output` in `work/<id>/result.json`).
@@ -78,8 +78,16 @@ For no possible check: `"notCheckable": "why"`. `file` is relative to REPO. `lin
 - **A false claim is a result, not a failure.** If the code says 20 seconds and the claim says 5,
   write the check that asserts 5 seconds and let it fail. That gives CONTRADICTED. Do not soften
   the assertion to make it pass. Do not answer `notLocated` when you found the line that disproves it.
-- **Never edit the target code, and never run `execute` yourself on a dirty tree.** The tool mutates
-  and restores files with git. Edits you leave behind will be thrown away or will block the run.
+- **Never edit the target code, and never run `execute` yourself on a dirty tree.** The tool edits one
+  line, then writes the file's saved bytes back and compares them with git's stored copy. Edits you
+  leave behind will block the run.
+- **A check is not sandboxed.** It is code, often written by you after reading the target repository,
+  and it runs as the user with their files within reach. For a repository you do not trust, run the whole
+  loop inside a container or as a throwaway user, and tell the user you did so.
+- **`execute` needs working files that match the git index byte-for-byte.** A Windows checkout with
+  `core.autocrlf=true` is refused. The fix is `git config core.autocrlf false` and a fresh checkout.
+- **If a run is interrupted, run `git status` in the target** and report any file still modified. A
+  stop signal restores the file, but SIGKILL cannot be caught.
 
 ## Verdicts and exit codes
 

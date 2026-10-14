@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { expandTerms } from './expand';
-import { git, unchanged } from './gitutil';
+import { differsMessage, git, unchanged } from './gitutil';
 import { locate } from './locate';
 import { askModel, modelAvailable } from './model';
 import { parsePeriods } from './parse';
@@ -65,7 +65,6 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
     const errors: string[] = [];
     const summary: Record<string, number> = Object.fromEntries(CLASSES.map((k) => [k, 0]));
     for (const c of claims) {
-      await new Promise((r) => setImmediate(r)); // let a pending SIGINT/SIGTERM run its restore-and-exit handler between claims
       const checkFile = join(out, 'checks', `${c.id}.check.ts`);
       const f = w(c.id, 'answer.json');
       let klass: Class; let reason: string; let extra: Record<string, unknown> = {};
@@ -76,9 +75,9 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
         try {
           const answer = JSON.parse(readFileSync(f, 'utf8')) as Answer;
           if (answer.target && !answer.notLocated && !answer.notCheckable && isDirty(repo, answer.target.file)) {
-            throw new Error(`${answer.target.file} has uncommitted changes; commit it first, execute refuses to mutate it`);
+            throw new Error(differsMessage(answer.target.file));
           }
-          const res = decide(repo, checkFile, answer);
+          const res = await decide(repo, checkFile, answer);
           writeFileSync(w(c.id, 'result.json'), JSON.stringify(res, null, 1));
           say(`${c.id}: ${res.class} (${res.located ?? '-'}) ${res.reason}`);
           klass = res.class; reason = res.reason;

@@ -13,7 +13,7 @@ const MAX_FILE_BYTES = 512 * 1024;
 const cache = new Map<string, SourceFile[]>();
 
 export function trackedFiles(repo: string): string[] {
-  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024 });
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024, magic: true });
   // a tracked symlink, or a path that resolves outside the repository, is never read
   return (r.stdout || '').split('\0').filter(Boolean).filter((f) => isSafeRegularFile(repo, f));
 }

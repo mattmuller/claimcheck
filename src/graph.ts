@@ -4,12 +4,12 @@
 // tiny helper functions) and reports the line of the literal a person would edit.
 // The compiler is claimcheck's own copy (a runtime dependency), never the target repository's.
 // If neither loads, or the repository has no TypeScript or JavaScript, this returns nothing.
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import type * as TS from 'typescript';
 import { EXCLUDE } from './excludes';
-import { git, isSafeRegularFile } from './gitutil';
+import { git, isInside, isSafeRegularFile } from './gitutil';
 import { type Equivalent, type Period, equivalents } from './parse';
 import { splitWords } from './terms';
 
@@ -295,7 +295,7 @@ class Folder {
 }
 
 function trackedRoots(repo: string): string[] {
-  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024 });
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024, magic: true });
   const out: string[] = [];
   for (const f of (r.stdout || '').split('\0')) {
     if (!f || !ROOT_EXT.test(f) || !isSafeRegularFile(repo, f)) continue;
@@ -320,6 +320,37 @@ export function graphCandidates(repo: string, periods: Period[]): GraphHit[] {
   }
 }
 
+/**
+ * A compiler host that cannot see outside the repository. A tsconfig `paths` entry or a relative import that
+ * leads out of the repo resolves to nothing, so no file elsewhere on the machine is read or becomes a candidate.
+ * The one exception is claimcheck's own typescript package (its lib files).
+ */
+export function repoBoundHost(ts: typeof TS, options: TS.CompilerOptions, repo: string): TS.CompilerHost {
+  const host = ts.createCompilerHost(options, true);
+  let root: string;
+  try { root = realpathSync(repo); } catch { root = resolve(repo); }
+  let tsDir: string | null = null;
+  try { tsDir = dirname(realpathSync(createRequire(import.meta.url).resolve('typescript'))); } catch { /* none */ }
+  const memo = new Map<string, boolean>();
+  const allowed = (p: string): boolean => {
+    let ok = memo.get(p);
+    if (ok === undefined) {
+      try {
+        const real = realpathSync(p);
+        ok = isInside(root, real) || real === root || (tsDir !== null && (isInside(tsDir, real) || real === tsDir));
+      } catch { ok = false; }
+      memo.set(p, ok);
+    }
+    return ok;
+  };
+  const { fileExists, readFile, directoryExists, getSourceFile } = host;
+  host.fileExists = (f) => allowed(f) && fileExists.call(host, f);
+  host.readFile = (f) => (allowed(f) ? readFile.call(host, f) : undefined);
+  host.directoryExists = (d) => allowed(d) && (directoryExists ? directoryExists.call(host, d) : true);
+  host.getSourceFile = (f, ...rest) => (allowed(f) ? getSourceFile.call(host, f, ...rest) : undefined);
+  return host;
+}
+
 function run(ts: typeof TS, repo: string, roots: string[], periods: Period[]): GraphHit[] {
   const options: TS.CompilerOptions = {
     allowJs: true, checkJs: false, resolveJsonModule: true,
@@ -336,7 +367,7 @@ function run(ts: typeof TS, repo: string, roots: string[], periods: Period[]): G
       else if (co?.baseUrl) options.baseUrl = resolve(repo, co.baseUrl);
     } catch { /* ignore a broken tsconfig */ }
   }
-  const program = ts.createProgram(roots.map((f) => join(repo, f)), options);
+  const program = ts.createProgram(roots.map((f) => join(repo, f)), options, repoBoundHost(ts, options, repo));
   const checker = program.getTypeChecker();
   const folder = new Folder(ts, checker);
   const rootSet = new Set(roots.map((f) => resolve(repo, f)));
