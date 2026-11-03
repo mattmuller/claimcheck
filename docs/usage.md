@@ -25,12 +25,12 @@ Run `npx @mattmuller/claimcheck --help` for the commands, `<command> --help` for
 | `--only <id>` | all | Run one claim id from the claims file |
 | `--json` | all | Print one JSON report on stdout. Human lines go to stderr |
 | `--json-file <path>` | all | Also write the JSON report to a file |
-| `--model-terms` | `prepare`, `author` | Add model-suggested search words (needs `CLAIMCHECK_MODEL`) |
+| `--model-terms` | `prepare`, `author` | Add model-suggested search words (needs `CLAIMCHECK_MODEL` and `AI_GATEWAY_API_KEY`) |
 | `--strict` | `execute` | A NOT-LOCATED or NOT-CHECKABLE claim also exits 1 |
 | `-h`, `--help` | all | Show help |
 | `-v`, `--version` | none | Show the version |
 
-These come from `claimcheck <command> --help`. Exit codes are in [Exit codes and JSON](exit-codes-and-json.md).
+These come from `claimcheck <command> --help`; the help text names only `CLAIMCHECK_MODEL`, but the model step reads both variables (`src/model.ts`). Exit codes are in [Exit codes and JSON](exit-codes-and-json.md).
 
 ## Claims and the model
 
