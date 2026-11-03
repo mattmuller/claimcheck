@@ -47,7 +47,11 @@
     "dist",
     "skills",
     "README.md",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "docs",
     "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "publishConfig": {
