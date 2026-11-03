@@ -10,11 +10,11 @@ is meaningful.
 For each claim it:
 
 1. **Parses** the claim. Periods and numbers are found by rules, not by a model.
-2. **Locates** candidate code without a model: the number in every equivalent unit, SQL intervals
+2. **Locates** candidate code without a model (unless you pass `--model-terms`): the number in every equivalent unit, SQL intervals
    and configuration keys, then a word-ranking search over the code's own names, then a map of how
    values flow between files. See [Finding the right line](finding-the-right-line.md).
 3. **Writes a check**: a small executable test that exercises the located code, not just its literal.
-   This is the only step that uses an AI model, and a person can do it instead. The model also picks
+   This step uses an AI model by default, and a person can do it instead. The model also picks
    which located line is the right one and names the value on it.
 4. **Proves the check has teeth**: it mutates exactly the located token (60 becomes 61), reruns the
    check, and restores the file. A check that still passes on the mutant proves nothing.
@@ -26,7 +26,7 @@ For each claim it:
 | CONTRADICTED | The check fails on the real code: the claim looks false. |
 | NO-TEETH | The check passes on both. It is discarded. |
 | NOT-LOCATED | No candidate code was found. |
-| NOT-CHECKABLE | The claim cannot be expressed as an executable check. |
+| NOT-CHECKABLE | No reliable check result: the claim cannot be written as a check, or the check crashed. |
 
 ## How it works, step by step
 
@@ -39,7 +39,7 @@ words such as "ninety" or "a year". This claim gives one period: 90 days.
 The same period is listed in every unit that gives a whole number: 90 days, 2,160 hours,
 129,600 minutes, 7,776,000 seconds and 7,776,000,000 milliseconds.
 
-**3. Search the code (no model).** Three layers each add and rank lines. First, patterns look for
+**3. Search the code (no model by default).** Three layers each add and rank lines. First, patterns look for
 each form and score every hit:
 
 | Pattern found | Example it matches | Score |
@@ -57,7 +57,7 @@ Tests, lock files, snapshots, build output and documentation are skipped, so the
 not other descriptions of the code. Configuration files (JSON, YAML, `.env` examples) are searched.
 The result is a short ranked list of lines, each with the reason it was found.
 
-**4. Choose the line and write a check (the one model step).** The model, or a person, gets the
+**4. Choose the line and write a check (the main model step).** The model, or a person, gets the
 claim and the ranked lines and does three things:
 - picks the line that really sets the period, or answers "not located" if none does. A line that
   only happens to hold the same number must be rejected;
@@ -82,6 +82,7 @@ Nothing else in the code base is touched.
 | fails | (not run) | **CONTRADICTED**: the code does not do what the claim says. |
 | passes | passes | **NO-TEETH**: the check never looked at that value, so it proves nothing. |
 | crashes | (any) | **NOT-CHECKABLE** |
+| passes | crashes instead of failing an assertion | **NOT-CHECKABLE** |
 
 ## Why breaking the code proves the check
 

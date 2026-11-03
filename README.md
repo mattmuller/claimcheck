@@ -27,7 +27,7 @@ c2: CONTRADICTED (src/jobs/queue.ts:5) the check fails on real code
 | "Cached thumbnails expire after 10 minutes." | `THUMBNAIL_TTL_MS = 10 * MINUTE` | PROVEN |
 | "Workers send a heartbeat every 5 seconds." | `HEARTBEAT_INTERVAL_MS = 20 * SECOND` | CONTRADICTED |
 
-The search for the right line was automatic. The two checks were written by hand, as an agent would write them. Only the step that picks the line and writes the check can use a model, and it is optional ([Models](docs/models.md)).
+The search for the right line was automatic. The two checks were written by hand, as an agent would write them. A model is optional: it can pick the line, write the check and, with `--model-terms`, suggest search words ([Models](docs/models.md)).
 
 Every claim ends in one of five verdicts:
 
@@ -37,7 +37,7 @@ Every claim ends in one of five verdicts:
 | CONTRADICTED | The check fails on the real code: the claim looks false. |
 | NO-TEETH | The check passes on both. It is discarded. |
 | NOT-LOCATED | No candidate code was found. |
-| NOT-CHECKABLE | The claim cannot be written as an executable check. |
+| NOT-CHECKABLE | No reliable result: the claim cannot be written as a check, or the check crashed. |
 
 ## Install and first run
 
@@ -50,7 +50,7 @@ npx @mattmuller/claimcheck prepare
 
 `prepare` only reads your code. It ranks the lines that could set the value and writes them to `results/work/c1/candidates.json`. On the example service it printed `c1: 1 periods, 18 candidates`. Keep `claims.json` and `results/` out of git.
 
-Next, an agent or a person picks the line and writes a check. The [agent skill](skills/claimcheck/SKILL.md) does this loop for Claude Code and other agents, with no API key. Then `execute` runs the checks and gives the verdicts. See [Usage](docs/usage.md).
+Next, an agent or a person picks the line and writes a check. The [agent skill](skills/claimcheck/SKILL.md) does this loop for AI coding agents, with no API key. Then `execute` runs the checks and gives the verdicts. See [Usage](docs/usage.md).
 
 ## Status
 
@@ -63,7 +63,7 @@ Early research, version 0.1.x. Commands and output will change. On its own bench
 - [How it works](docs/how-it-works.md): the steps, why breaking the code proves the check, what it cannot catch
 - [When to use it](docs/when-to-use.md): docs, notices and runbooks that make claims
 - [Finding the right line](docs/finding-the-right-line.md): the research and the measurements
-- [Models](docs/models.md): the one step that needs a model, and how to skip it
+- [Models](docs/models.md): where a model helps, and how to skip it
 - [Usage](docs/usage.md): commands, options and safety
 - [Exit codes and JSON](docs/exit-codes-and-json.md): for scripts and CI
 - [Status](docs/status.md), [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Changelog](CHANGELOG.md)

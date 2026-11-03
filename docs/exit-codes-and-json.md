@@ -8,8 +8,9 @@ Exit codes follow the pytest convention. A script or CI job can read them direct
 | 1 | At least one claim is CONTRADICTED or NO-TEETH. With `--strict`, a NOT-LOCATED or NOT-CHECKABLE claim also gives 1. | Not used. |
 | 2 | Could not check: bad arguments, unknown command, missing or invalid claims file, `--repo` not a git repository, target file differs from the git index, or a crash. | Same. `author` also gives 2 when no model is configured or a call fails. |
 
-A claim with no `answer.json` yet is reported as NOT-CHECKABLE. Code 2 always prints one line on
-stderr that says what to fix.
+A claim with no `answer.json` yet is reported as NOT-CHECKABLE. Code 2 prints at least one message that says what to fix.
+A run that cannot start prints one line on stderr. Per-claim `execute` errors print one line each on
+stdout, or on stderr with `--json`.
 
 `--json` prints one JSON object on stdout and nothing else. The human lines go to stderr.
 `--json-file <path>` writes the same object to a file. Both work with all three commands.
@@ -30,4 +31,4 @@ For `prepare`, each claim carries `periods` and the top 5 `candidates`
 (`file`, `line`, `text`, `why`, `score`, `usedBy`). The full list of 25 stays in
 `<out>/work/<id>/candidates.json`.
 
-The sample above shows the main fields. `execute` also adds an `errors` array with one line for each claim it could not check. A run that fails before it starts prints `error` and an empty `claims` array. A claim it could not check has `"class": null`.
+The sample above shows the main fields. `execute` also adds an `errors` array. It holds one line for each claim whose processing threw an error, and that claim has `"class": null`. A missing `answer.json` or a crashed check gives `"class": "NOT-CHECKABLE"` and adds nothing to `errors`. A run that fails before it starts prints `error` and an empty `claims` array.

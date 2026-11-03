@@ -1,6 +1,6 @@
 # Does it need an AI model?
 
-Only for one step, and that step can be done by hand.
+Model use is optional. A model can choose the line, write the check and suggest search words (`--model-terms`). A person or agent can choose the line and write the check by hand.
 
 | Step | How it runs |
 |---|---|

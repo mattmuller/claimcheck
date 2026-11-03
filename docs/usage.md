@@ -1,6 +1,6 @@
 # Usage
 
-Node 22 is the only requirement.
+You need Node 22 or newer and a git repository to check.
 
 ```sh
 npx @mattmuller/claimcheck prepare --repo <path> --claims claims.json --out results
@@ -25,7 +25,7 @@ Run `npx @mattmuller/claimcheck --help` for the commands, `<command> --help` for
 | `--only <id>` | all | Run one claim id from the claims file |
 | `--json` | all | Print one JSON report on stdout. Human lines go to stderr |
 | `--json-file <path>` | all | Also write the JSON report to a file |
-| `--model-terms` | `prepare`, `author` | Add model-suggested search words (needs `CLAIMCHECK_MODEL` and `AI_GATEWAY_API_KEY`) |
+| `--model-terms` | `prepare`, `author` | Add model-suggested search words (needs both `CLAIMCHECK_MODEL` and `AI_GATEWAY_API_KEY`; with only one set, it adds nothing) |
 | `--strict` | `execute` | A NOT-LOCATED or NOT-CHECKABLE claim also exits 1 |
 | `-h`, `--help` | all | Show help |
 | `-v`, `--version` | none | Show the version |
@@ -35,13 +35,13 @@ These come from `claimcheck <command> --help`; the help text names only `CLAIMCH
 ## Claims and the model
 
 `claims.json` is `[{ "id": "...", "quote": "..." }]`. The model is set by `CLAIMCHECK_MODEL`,
-called through an OpenAI-compatible endpoint (`CLAIMCHECK_GATEWAY_URL`, key in
+called through a compatible model endpoint (`CLAIMCHECK_GATEWAY_URL`, key in
 `AI_GATEWAY_API_KEY`). Without a model, a person or agent writes each `answer.json` by hand.
 
 ## Agents
 
-**Use it from an AI agent.** `skills/claimcheck/SKILL.md` teaches Claude Code, and any agent that reads
-the Agent Skills format, the whole loop. The agent is the model, so no API key is needed. Copy or link
+**Use it from an AI agent.** `skills/claimcheck/SKILL.md` teaches AI coding agents that read
+the Agent Skills format the whole loop. The agent is the model, so no API key is needed. Copy or link
 the folder `skills/claimcheck` into the agent's skills directory.
 
 ## Safety

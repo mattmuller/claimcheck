@@ -33,7 +33,7 @@ The `answer.json` shape is in `skills/claimcheck/SKILL.md`. Every option is in t
 ### Exit codes
 
 - `execute` returns 0 when no claim is CONTRADICTED or NO-TEETH, 1 when at least one is, and 2 when it could not check. With `--strict`, a NOT-LOCATED or NOT-CHECKABLE claim also gives 1. `prepare` and `author` return 0 or 2.
-- On 2, read the one line on stderr and fix the setup. A 2 is not a verdict.
+- On 2, read the messages and fix the setup. Most go to stderr. Per-claim `execute` errors go to stdout, or to stderr with `--json`. A 2 is not a verdict.
 - A claim with no `answer.json` yet is reported as NOT-CHECKABLE.
 
 ### JSON

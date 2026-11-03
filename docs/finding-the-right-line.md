@@ -22,18 +22,18 @@ search for the number cannot find the line that proves it false.
 The usual answer to "search code by meaning" is a vector database of embeddings, or a graph
 database of the code. We looked at the research before building either, and built neither:
 
-- **Agents that search well mostly search plainly.** Claude Code does not index a code base at
+- **Agents that search well mostly search plainly.** A leading coding agent does not index a code base at
   all; it chooses what to look for and runs a text search, partly because an index goes stale the
-  moment the code changes ([vadim.blog](https://vadim.blog/claude-code-no-indexing/);
-  [SmartScope](https://smartscope.blog/en/ai-development/practices/rag-debate-agentic-search-code-exploration/)).
+  moment the code changes ([a blog post](https://vadim.blog/claude-code-no-indexing/);
+  [a second write-up](https://smartscope.blog/en/ai-development/practices/rag-debate-agentic-search-code-exploration/)).
 - **Embeddings win on average, not everywhere.** On CoIR, the main code-retrieval benchmark, large
   embedding models beat BM25 overall, but BM25 stays strong where exact names and numbers matter
   ([Li et al., 2024](https://arxiv.org/html/2407.02883v3)). Claims are full of exact numbers.
-- **A small graph is enough.** LocAgent finds the code a bug report is about with a lightweight
+- **A small graph is enough.** One research agent finds the code a bug report is about with a lightweight
   in-memory graph of files, functions, imports and calls, built per run
-  ([Chen et al., ACL 2025](https://aclanthology.org/2025.acl-long.426.pdf)). RepoGraph shows the same
-  at line level ([Ouyang et al., 2024](https://arxiv.org/html/2410.14684v1)). CodexGraph needs a
-  Neo4j server for the same job ([Liu et al.](https://www.researchgate.net/publication/392505894_CodexGraph_Bridging_Large_Language_Models_and_Code_Repositories_via_Code_Graph_Databases)).
+  ([Chen et al., ACL 2025](https://aclanthology.org/2025.acl-long.426.pdf)). A second system shows the same
+  at line level ([Ouyang et al., 2024](https://arxiv.org/html/2410.14684v1)). A third needs a
+  graph database server for the same job ([Liu et al.](https://www.researchgate.net/publication/392505894_CodexGraph_Bridging_Large_Language_Models_and_Code_Repositories_via_Code_Graph_Databases)).
 - **Model-written search terms can help retrieval**
   ([query expansion for code search, 2025](https://www.sciencedirect.com/science/article/abs/pii/S0164121225002511)),
   so we tried it, and kept it only as far as our own measurements supported it (below).
