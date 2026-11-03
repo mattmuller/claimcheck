@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping. This page tells you how to set up, which commands to run, and the rules each change must follow.
+Thank you for helping. This page tells you how to set up, which commands to run, and the rules each change must follow. AI agents: read [AGENTS.md](AGENTS.md) too.
 
 ## Set up
 
@@ -27,11 +27,39 @@ Run type-check, test and build before you open a pull request. CI runs them on N
 
 **1. Prove every new test can fail.** Break the code the test covers. Run the test. See it go red. Restore the code. A test that has never failed may check nothing, and claimcheck itself exists to catch that mistake. Write "yes" in the pull request template when you did this.
 
-**2. Do not change the benchmark claims, and do not tune a weight to them, without saying so in the PR.** The numbers in the README come from `bench/`. A weight chosen by trying values on the same claims flatters the result. CI compares the hit and MRR numbers with the committed `bench/results.json` and fails when they differ. If your change moves them on purpose, commit the new `bench/results.json` and explain why in the description.
+**2. Do not change the benchmark claims, and do not tune a weight to them, without saying so in the PR.** The numbers in the README and in [docs/finding-the-right-line.md](docs/finding-the-right-line.md) come from `bench/`. A weight chosen by trying values on the same claims flatters the result. CI compares the hit and MRR numbers with the committed `bench/results.json` and fails when they differ. If your change moves them on purpose, commit the new `bench/results.json` and explain why in the description.
 
 **3. Keep the project generic.** Examples, claims, fixtures and docs use neutral subjects such as caches, queues, timeouts and log files. Use no company, product or other project names. This keeps the tool and its documentation usable by anyone.
 
 **4. Send security reports through [SECURITY.md](SECURITY.md), not issues.** A public issue shows an attack before there is a fix. Use the private advisory page that file links to.
+
+## Repo map
+
+`src/`
+
+- `cli.ts`: command-line entry. Parses arguments, runs `prepare`, `author` and `execute`, sets exit codes, prints `--json`.
+- `parse.ts`: finds periods and numbers in a claim, including numbers written as words.
+- `locate.ts`: combines the search layers and ranks candidate lines.
+- `corpus.ts`: lists the tracked, safe, regular files the search reads.
+- `excludes.ts`: paths the search skips (tests, lock files, build output, docs).
+- `bm25.ts`: BM25 ranking over split identifier names.
+- `terms.ts`: splits identifiers and text into words, and holds the built-in synonym table.
+- `expand.ts`: optional model-suggested search words (`--model-terms`) and their cache.
+- `graph.ts`: value map built with the TypeScript compiler.
+- `prompt.ts`: the prompts sent to the model in `author`.
+- `model.ts`: the model call and gateway URL checks.
+- `mutate.ts`: edits one token on one line, runs the check, restores the file.
+- `verdict.ts`: runs the check and turns results into a verdict.
+- `gitutil.ts`: safe git calls and the safe-file test.
+
+Other folders:
+
+- `test/`: vitest tests. `security.test.ts` pins the safety behaviour.
+- `bench/`: the search benchmark, its fixture service and `results.json`.
+- `scripts/`: CI helpers (`compare-bench.mjs`, `changelog-section.mjs`).
+- `skills/claimcheck/`: the Agent Skill for claimcheck itself.
+- `docs/`: the documentation pages that the README links to.
+- `.github/`: CI, release workflow, issue and pull request templates.
 
 ## Writing style
 
