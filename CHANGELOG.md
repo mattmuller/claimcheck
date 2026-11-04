@@ -6,6 +6,13 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-04
+
+### Changed
+
+- The README is shorter. Commands, options, exit codes, JSON output, models and the research behind the search are now in `docs/`, and `AGENTS.md` tells AI coding agents how to use claimcheck. The npm package includes both. (#8)
+- Development dependencies updated (vite, vitest, esbuild). The tool behaves as in 0.1.2.
+
 ## [0.1.2] - 2026-10-14
 
 ### Added
@@ -63,7 +70,8 @@ First release. claimcheck checks a written claim about software against the code
 - Includes a benchmark in `bench/` with 38 claims about a made-up service. `npm run bench` reproduces the numbers in the README. (93f5885)
 - Ships as one bundled file, `dist/cli.js`, run with `npx @mattmuller/claimcheck`. (26f62cf)
 
-[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/mattmuller/claimcheck/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/mattmuller/claimcheck/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/mattmuller/claimcheck/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mattmuller/claimcheck/releases/tag/v0.1.0
