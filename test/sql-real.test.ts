@@ -1,4 +1,4 @@
-// Runs only when CLAIMCHECK_TEST_PG_URL names a LOCAL scratch database, for example
+// Skipped unless CLAIMCHECK_TEST_PG_URL is set. It then names a LOCAL scratch database, for example
 //   docker run --rm -d -p 127.0.0.1:55988:5432 -e POSTGRES_PASSWORD=x postgres:17
 // and a plain role that may create schemas in it (no superuser, CREATEROLE, BYPASSRLS or REPLICATION).
 // The stand-in connection in sql.test.ts cannot see the two defects below, so they are pinned here.
@@ -7,10 +7,13 @@ import { buildStatements, parseLocalUrl, pgRunner } from '../src/sql';
 
 const url = process.env.CLAIMCHECK_TEST_PG_URL;
 
-describe.skipIf(!url)('sql: a real server', () => {
-  const conn = (() => { const c = parseLocalUrl(url ?? ''); if ('error' in c) throw new Error(c.error); return c; })();
-  const run = (statements: string[]) => pgRunner(conn)(statements);
+// to run it: set CLAIMCHECK_TEST_PG_URL (see CONTRIBUTING.md, "Real-database tests")
+describe.skipIf(!url)('sql: a real server (set CLAIMCHECK_TEST_PG_URL to run)', () => {
+  // read lazily: describe.skipIf still runs this body when the variable is unset
+  const connect = () => { const c = parseLocalUrl(url ?? ''); if ('error' in c) throw new Error(c.error); return c; };
+  const run = (statements: string[]) => pgRunner(connect())(statements);
   async function query(text: string) {
+    const conn = connect();
     const pg = (await import('pg')).default;
     const c = new pg.Client({ host: conn.host, port: conn.port, user: conn.user, password: conn.password, database: conn.database });
     await c.connect();

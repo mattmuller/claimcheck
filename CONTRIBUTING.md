@@ -23,6 +23,21 @@ npm ci
 
 Run type-check, test and build before you open a pull request. CI runs them on Node 22 and 24.
 
+## Real-database tests
+
+`test/sql-real.test.ts` checks the SQL runner against a real Postgres. It is skipped unless you set `CLAIMCHECK_TEST_PG_URL`. CI does not set it.
+
+To run it, start a throwaway local database and a plain role:
+
+```sh
+docker run --rm -d --name cc-pg -p 127.0.0.1:55988:5432 -e POSTGRES_PASSWORD=x postgres:17
+docker exec cc-pg psql -U postgres -c "create role plain login password 'p' nosuperuser nocreaterole nobypassrls noreplication" -c "create database scratch owner plain"
+CLAIMCHECK_TEST_PG_URL=postgres://plain:p@127.0.0.1:55988/scratch npm test
+docker rm -f cc-pg
+```
+
+Use a database you can lose. The tests create and drop a schema named `cc_real`, and two of them commit on purpose to prove the probe notices.
+
 ## House rules
 
 **1. Prove every new test can fail.** Break the code the test covers. Run the test. See it go red. Restore the code. A test that has never failed may check nothing, and claimcheck itself exists to catch that mistake. Write "yes" in the pull request template when you did this.
