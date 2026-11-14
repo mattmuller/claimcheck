@@ -77,10 +77,10 @@ something the code does not do. `npm run bench` reproduces every number here.
 |---|---|---|---|---|
 | First draft, as committed, on macOS | 6% | 6% | 6% | 3.4 s |
 | First draft, regex bug fixed | 51% | 69% | 69% | 2.2 s |
-| 1. Patterns, in-process | 54% | 74% | 74% | 0.03 s |
+| 1. Patterns, in-process | 60% | 74% | 74% | 0.03 s |
 | 1–3. + synonyms and BM25 | 74% | 100% | 100% | 0.15 s |
 | 1–4. + value map | **77%** | **100%** | **100%** | 1.1 s |
-| 1–5. + model-suggested words | 77% | 97% | 100% | 0.7 s |
+| 1–5. + model-suggested words | 74% | 97% | 100% | 0.7 s |
 
 The first draft used `git grep -E`. On macOS that uses the system's POSIX regex library, which
 does not read `\b` (a word boundary) or `[^\n]` the way the patterns meant, so it found almost

@@ -4,7 +4,7 @@
 // and `[^\n]` differently, so the same pattern found the line on one machine and nothing on another.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { EXCLUDE } from './excludes';
+import { currentExclude } from './excludes';
 import { git, isSafeRegularFile } from './gitutil';
 
 export interface SourceFile { file: string; text: string; lines: string[] }
@@ -13,13 +13,14 @@ const MAX_FILE_BYTES = 512 * 1024;
 const cache = new Map<string, SourceFile[]>();
 
 export function trackedFiles(repo: string): string[] {
-  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024, magic: true });
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...currentExclude()], { maxBuffer: 64 * 1024 * 1024, magic: true });
   // a tracked symlink, or a path that resolves outside the repository, is never read
   return (r.stdout || '').split('\0').filter(Boolean).filter((f) => isSafeRegularFile(repo, f));
 }
 
 export function readCorpus(repo: string): SourceFile[] {
-  const hit = cache.get(repo);
+  const key = `${repo}\0${currentExclude().join('\0')}`;
+  const hit = cache.get(key);
   if (hit) return hit;
   const files: SourceFile[] = [];
   for (const file of trackedFiles(repo)) {
@@ -30,7 +31,7 @@ export function readCorpus(repo: string): SourceFile[] {
       files.push({ file, text, lines: text.split('\n') });
     } catch { /* deleted but still tracked */ }
   }
-  cache.set(repo, files);
+  cache.set(key, files);
   return files;
 }
 

@@ -20,7 +20,7 @@ Set `REPO` (the project to inspect), `OUT` (a scratch folder outside REPO) and `
    Copy each sentence exactly. One fact per claim. Split "X after 5 minutes and Y after 2 hours".
 2. **Prepare**: `CC prepare --repo $REPO --claims $CLAIMS --out $OUT --json`.
    Read the JSON from stdout. Per claim you get the periods found and the top 5 candidates.
-   The full list of 25 is in `$OUT/work/<id>/candidates.json`. The prompt is `$OUT/work/<id>/author.prompt.txt`.
+   The full list (at most 25 candidates) is in `$OUT/work/<id>/candidates.json`. The prompt is `$OUT/work/<id>/author.prompt.txt`.
 3. **For each claim, decide** (read `author.prompt.txt` first, then open the candidate files):
    - Which line sets the value the claim talks about? Read the code around it, not only the line.
    - If no candidate sets it, the answer is `notLocated`. Do not stretch.
@@ -49,6 +49,14 @@ Use `--only <id>` to rerun one claim. Use `--strict` when a gap must fail the ru
 
 For no line: `"target": null, "notLocated": "what you looked for and did not find"`.
 For no possible check: `"notCheckable": "why"`. `file` is relative to REPO. `line` starts at 1.
+
+## SQL claims
+
+When the value lives in SQL (an `interval` in a function) and the user gave you a local database URL, write a SQL check
+instead of answering `notCheckable`. Set `"checkKind": "sql"` and add `"sql": { "files": [...], "check": "..." }`.
+The check must fail with `ASSERT`. Run `execute` with `--sql-url <url>`. Never ask for, guess or reuse a database URL
+the user did not give you. The tool refuses any host that is not this machine, and always rolls back.
+See `docs/sql-checks.md`.
 
 ## Rules, and why they exist
 

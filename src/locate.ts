@@ -1,7 +1,6 @@
 // Stage 2: deterministic candidate search. No model involved.
-import { grepCorpus, type Row } from './corpus';
+import { grepCorpus, readCorpus, type Row } from './corpus';
 import { type Index, indexRepo, scoreDoc, search } from './bm25';
-import { EXCLUDE } from './excludes';
 import { graphCandidates } from './graph';
 import { type Equivalent, type Period, equivalents } from './parse';
 import { queryTerms, terms } from './terms';
@@ -34,6 +33,11 @@ const UNIT_WORDS: Record<string, string> = {
 };
 const SEMANTIC = /ttl|window|retention|retain|expir|expire|max_?age|duration|period|deadline|timeout|cooldown|interval|delay|stale/i;
 
+/** A regex source for the number `n`, also matching it with `_` digit separators: 1000 matches 1_000. */
+export function groupedNumber(n: string): string {
+  return n.replace(/(\d)(?=(\d{3})+$)/g, '$1_?');
+}
+
 function grep(repo: string, pattern: string): Row[] {
   return grepCorpus(repo, pattern);
 }
@@ -54,6 +58,49 @@ export function isValueLine(text: string): boolean {
   return !COMMENT.test(text) && (NUMERIC.test(text) || DECLARATION.test(text));
 }
 
+
+const isSql = (c: { file: string }) => /\.sql$/.test(c.file);
+const LIVE_CODE = /\.(?:[cm]?[jt]sx?|py|rb|go|java|kt|rs|cs|php|swift)$/;
+
+/**
+ * Live application code outranks a SQL migration that holds the same value. A named constant whose
+ * identifier shares a word with the claim (`CANCELLATION_DAYS = 14` for "right to cancel") gets more.
+ */
+function liveCodeBonus(c: Candidate, claimWords: string[], values: Set<number>): number {
+  if (!LIVE_CODE.test(c.file)) return 0;
+  // only a line that holds the claim's number, in some unit: a word-only match must not climb above a SQL line that sets the value
+  const nums = (c.text.match(/(?<![\w.$])\d[\d_]*(?:\.\d+)?(?![\w])/g) ?? []).map((x) => Number(x.replace(/_/g, '')));
+  if (!nums.some((n) => values.has(n))) return 0;
+  let bonus = 3;
+  c.why += '; live application code';
+  const decl = c.text.match(/^\s*(?:export\s+)?(?:(?:const|let|var|final|static|public|private|readonly|val|def)\s+)?([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=/);
+  if (decl && claimWords.some((k) => decl[1].toLowerCase().includes(k))) { bonus += 5; c.why += `; name ${decl[1]} shares a claim word`; }
+  return bonus;
+}
+
+const MIGRATION = /(^|\/)migrations\/[^/]*\.sql$/;
+const escapeRegex = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A migration whose function is redefined by a later migration in the same folder no longer sets live behaviour. */
+export function markSuperseded(repo: string, cands: Candidate[]): void {
+  const inMigrations = cands.filter((c) => MIGRATION.test(c.file));
+  if (!inMigrations.length) return;
+  const files = readCorpus(repo).filter((f) => MIGRATION.test(f.file));
+  const DEFINES = /create\s+(?:or\s+replace\s+)?(?:function|procedure|view)\s+([\w."]+)/i;
+  for (const c of inMigrations) {
+    const src = files.find((f) => f.file === c.file);
+    if (!src) continue;
+    // the object whose body holds this line: the nearest definition at or above it
+    let name: string | undefined;
+    for (let i = c.line - 1; i >= 0 && !name; i--) name = DEFINES.exec(src.lines[i])?.[1];
+    if (!name) continue;
+    const dir = c.file.slice(0, c.file.lastIndexOf('/') + 1);
+    const redefines = new RegExp(`create\\s+(?:or\\s+replace\\s+)?(?:function|procedure|view)\\s+${escapeRegex(name)}(?![\\w.])`, 'i');
+    const later = files.filter((f) => f.file.startsWith(dir) && !f.file.slice(dir.length).includes('/') && f.file > c.file && redefines.test(f.text)).pop();
+    if (later) { c.score -= 8; c.why += `; superseded: ${name} is redefined in ${later.file}`; }
+  }
+}
+
 export function locate(repo: string, periods: Period[], claim = '', max = 25, opts: LocateOptions = {}): Candidate[] {
   const useSyn = opts.synonyms !== false;
   const useBm25 = opts.bm25 !== false;
@@ -70,28 +117,30 @@ export function locate(repo: string, periods: Period[], claim = '', max = 25, op
   };
 
   for (const p of periods) {
+    const gv = groupedNumber(String(p.value));
     for (const eq of equivalents(p) as Equivalent[]) {
       const n = String(eq.value);
       const words = UNIT_WORDS[eq.unit];
       const isMs = eq.unit === 'ms';
       // number + unit word on one line, either order: `60 days`, `DAYS = 60`, `days: 60`
       if (!isMs && words) {
-        const rx = `(\\b${n}\\b[^\\n]{0,24}(${words})|(${words})[^\\n]{0,24}\\b${n}\\b)`;
+        const g = groupedNumber(n);
+        const rx = `(\\b${g}\\b[^\\n]{0,24}(${words})|(${words})[^\\n]{0,24}\\b${g}\\b)`;
         for (const r of grep(repo, rx)) add(r, `${n} near ${eq.unit}`, eq === equivalents(p)[0] ? 6 : 4);
       }
       // raw big numbers: seconds / milliseconds digits, and 1e3 style products
       if (eq.value >= 3600 && (eq.unit === 'second' || isMs)) {
-        for (const r of grep(repo, `\\b${n.replace(/(\d)(?=(\d{3})+$)/g, '$1_?')}\\b`)) add(r, `literal ${n} (${eq.unit})`, 5);
+        for (const r of grep(repo, `\\b${groupedNumber(n)}\\b`)) add(r, `literal ${n} (${eq.unit})`, 5);
       }
     }
     // products of unit factors with the bare number: 60 * 60 * 24 * 60, 24 * 60 * 60 * 1000 ...
     const unitFactors = '(24|60|3600|1000|86400|86_400|7|30|365)';
-    const bare = `\\b${p.value}\\b`;
+    const bare = `\\b${gv}\\b`;
     for (const r of grep(repo, `(${bare}[ ]*\\*[ ]*${unitFactors}|${unitFactors}[ ]*\\*[ ]*${bare})`)) add(r, `${p.value} times a unit factor`, 5);
     // a bare number on a line that also carries a word from the claim (weak: no unit needed)
     const kws = keywords(claim);
     if (kws.length) {
-      for (const r of grep(repo, `\\b${p.value}\\b`)) {
+      for (const r of grep(repo, `\\b${gv}\\b`)) {
         if (kws.some((k) => r.text.toLowerCase().includes(k))) add(r, `${p.value} with a claim word`, 3);
         else if (useSyn && query.length) {
           const own = new Set(terms(r.text));
@@ -102,7 +151,7 @@ export function locate(repo: string, periods: Period[], claim = '', max = 25, op
     }
     // SQL / cron / config-key style
     for (const r of grep(repo, `interval[ ]+'?${p.value}[ ]+(${UNIT_WORDS[p.unit]})|'${p.value}[ ]+(${UNIT_WORDS[p.unit]})s?'`)) add(r, `sql interval ${p.value}`, 6);
-    for (const r of grep(repo, `(max_?age|expires?_?in|retention|ttl|timeout|interval|period)[^\\n]{0,40}\\b${p.value}\\b`)) add(r, `period setting with ${p.value}`, 5);
+    for (const r of grep(repo, `(max_?age|expires?_?in|retention|ttl|timeout|interval|period)[^\\n]{0,40}\\b${gv}\\b`)) add(r, `period setting with ${p.value}`, 5);
   }
 
   if (useGraph) {
@@ -145,12 +194,16 @@ export function locate(repo: string, periods: Period[], claim = '', max = 25, op
     for (const [k, c] of byKey) if (!c.why) byKey.delete(k);
   }
 
+  const kws = keywords(claim);
+  const claimValues = new Set(periods.flatMap((p) => (equivalents(p) as Equivalent[]).map((e) => e.value)));
   for (const c of byKey.values()) {
     if (SEMANTIC.test(c.text)) { c.score += 3; c.why += '; semantic name'; }
     if (/^\s*(export\s+)?(const|let|var)\s+[A-Z_0-9]+\b/.test(c.text) || /^[A-Z_0-9]+\s*[:=]/.test(c.text)) c.score += 2;
     if (/^\s*(export\s+)?(const|let|var)\s+[A-Z][A-Z_0-9]*(DAYS|HOURS|MONTHS|YEARS|SECONDS|MINUTES|WEEKS|WINDOW|TTL|RETENTION)[A-Z_0-9]*\s*(:[^=]+)?=\s*[\d_]+\s*;?\s*(\/\/.*)?$/.test(c.text)) { c.score += 4; c.why += '; named constant = bare number'; }
-    if (COMMENT.test(c.text)) c.score -= 4; // comment line
+    if (COMMENT.test(c.text)) { c.score -= 4; continue; } // comment line
+    c.score += liveCodeBonus(c, kws, claimValues);
   }
+  markSuperseded(repo, [...byKey.values()]);
   // collapse identical lines that repeat across files (copied migrations, mirrored apps): keep the last path and say how many
   const groups = new Map<string, Candidate[]>();
   for (const c of byKey.values()) {
@@ -164,9 +217,11 @@ export function locate(repo: string, periods: Period[], claim = '', max = 25, op
     if (g.length > 1) top.why += `; identical line also in ${g.length - 1} other place(s): ${g.slice(0, 4).filter((x) => x !== top).map((x) => x.file).join(', ')}`;
     uniq.push(top);
   }
-  // keep SQL and application code both visible: separate quotas
+  // keep SQL and application code both visible: SQL gets at most half the slots, and the total never exceeds `max`
   const sorted = uniq.sort((a, b) => b.score - a.score);
-  const isSql = (c: Candidate) => /\.sql$/.test(c.file);
   for (const c of sorted) c.score = Math.round(c.score * 100) / 100;
-  return [...sorted.filter(isSql).slice(0, Math.ceil(max / 2)), ...sorted.filter((c) => !isSql(c)).slice(0, max)].sort((a, b) => b.score - a.score);
+  const sql = sorted.filter(isSql);
+  const code = sorted.filter((c) => !isSql(c));
+  const sqlTake = Math.min(sql.length, Math.ceil(max / 2), Math.max(0, max - Math.min(code.length, Math.floor(max / 2))));
+  return [...sql.slice(0, sqlTake), ...code.slice(0, max - sqlTake)].sort((a, b) => b.score - a.score);
 }

@@ -10,16 +10,30 @@ export interface Target {
   token: string;
 }
 
-/** Replace the first number inside the token with number+1. Returns null when the token is not on the line. */
+/**
+ * Add one to a numeric literal and keep its shape: `86_400_000` becomes `86_400_001`, never `87_400_000`.
+ * The literal keeps its `_` separators (groups of three) and its decimal places.
+ */
+export function bumpNumber(literal: string): string {
+  const plain = literal.replace(/_/g, '');
+  const decimals = plain.includes('.') ? plain.split('.')[1].length : 0;
+  const bumped = (Number(plain) + 1).toFixed(decimals);
+  if (!literal.includes('_')) return bumped;
+  const [whole, frac] = bumped.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+$)/g, '_');
+  return frac === undefined ? grouped : `${grouped}.${frac}`;
+}
+
+/** Replace the first number inside the token (a whole literal, `_` separators included) with number+1. Returns null when the token is not on the line. */
 export function mutatedLine(line: string, token: string): { before: string; after: string } | null {
   const at = line.indexOf(token);
   if (at < 0) return null;
-  const num = token.match(/\d+(?:\.\d+)?/);
+  const num = token.match(/\d[\d_]*(?:\.\d+)?/);
   // no number in the token: swap a unit word for a neighbouring unit instead
   const UNIT_SWAP: [RegExp, string][] = [[/year/, 'month'], [/month/, 'week'], [/week/, 'day'], [/day/, 'hour'], [/hour/, 'minute']];
   const swap = num ? null : UNIT_SWAP.find(([re]) => re.test(token));
   if (!num && !swap) return null;
-  const bumped = num ? token.replace(num[0], String(Number(num[0]) + 1)) : token.replace(swap![0], swap![1]);
+  const bumped = num ? token.replace(num[0], bumpNumber(num[0])) : token.replace(swap![0], swap![1]);
   return { before: line, after: line.slice(0, at) + bumped + line.slice(at + token.length) };
 }
 

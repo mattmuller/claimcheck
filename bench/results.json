@@ -77,7 +77,7 @@
      "mrr": 0
     }
    },
-   "ms": 3385
+   "ms": 1386
   },
   "original (regex fixed)": {
    "overall": {
@@ -152,15 +152,15 @@
      "mrr": 0
     }
    },
-   "ms": 2173
+   "ms": 1049
   },
   "rules": {
    "overall": {
     "n": 35,
-    "hit1": 19,
+    "hit1": 21,
     "hit5": 26,
     "hit10": 26,
-    "mrr": 22.166666666666664
+    "mrr": 23.333333333333332
    },
    "byKind": {
     "direct": {
@@ -186,10 +186,10 @@
     },
     "derived": {
      "n": 5,
-     "hit1": 4,
+     "hit1": 3,
      "hit5": 5,
      "hit10": 5,
-     "mrr": 4.5
+     "mrr": 4
     },
     "config": {
      "n": 4,
@@ -200,10 +200,10 @@
     },
     "env-default": {
      "n": 3,
-     "hit1": 0,
+     "hit1": 3,
      "hit5": 3,
      "hit10": 3,
-     "mrr": 1.3333333333333333
+     "mrr": 3
     },
     "sql": {
      "n": 4,
@@ -227,15 +227,15 @@
      "mrr": 0
     }
    },
-   "ms": 30
+   "ms": 14
   },
   "+synonyms+bm25": {
    "overall": {
     "n": 35,
-    "hit1": 26,
+    "hit1": 27,
     "hit5": 35,
     "hit10": 35,
-    "mrr": 29.43333333333333
+    "mrr": 29.68333333333333
    },
    "byKind": {
     "direct": {
@@ -250,7 +250,7 @@
      "hit1": 2,
      "hit5": 5,
      "hit10": 5,
-     "mrr": 3.033333333333333
+     "mrr": 3.25
     },
     "converted": {
      "n": 4,
@@ -275,10 +275,10 @@
     },
     "env-default": {
      "n": 3,
-     "hit1": 2,
+     "hit1": 3,
      "hit5": 3,
      "hit10": 3,
-     "mrr": 2.5
+     "mrr": 3
     },
     "sql": {
      "n": 4,
@@ -299,10 +299,10 @@
      "hit1": 1,
      "hit5": 3,
      "hit10": 3,
-     "mrr": 2
+     "mrr": 1.5333333333333332
     }
    },
-   "ms": 153
+   "ms": 81
   },
   "+graph": {
    "overall": {
@@ -310,82 +310,7 @@
     "hit1": 27,
     "hit5": 35,
     "hit10": 35,
-    "mrr": 29.93333333333333
-   },
-   "byKind": {
-    "direct": {
-     "n": 3,
-     "hit1": 3,
-     "hit5": 3,
-     "hit10": 3,
-     "mrr": 3
-    },
-    "wording": {
-     "n": 5,
-     "hit1": 3,
-     "hit5": 5,
-     "hit10": 5,
-     "mrr": 3.7
-    },
-    "converted": {
-     "n": 4,
-     "hit1": 3,
-     "hit5": 4,
-     "hit10": 4,
-     "mrr": 3.5
-    },
-    "derived": {
-     "n": 5,
-     "hit1": 5,
-     "hit5": 5,
-     "hit10": 5,
-     "mrr": 5
-    },
-    "config": {
-     "n": 4,
-     "hit1": 3,
-     "hit5": 4,
-     "hit10": 4,
-     "mrr": 3.5
-    },
-    "env-default": {
-     "n": 3,
-     "hit1": 3,
-     "hit5": 3,
-     "hit10": 3,
-     "mrr": 3
-    },
-    "sql": {
-     "n": 4,
-     "hit1": 2,
-     "hit5": 4,
-     "hit10": 4,
-     "mrr": 2.4000000000000004
-    },
-    "distractor": {
-     "n": 4,
-     "hit1": 4,
-     "hit5": 4,
-     "hit10": 4,
-     "mrr": 4
-    },
-    "wrong": {
-     "n": 3,
-     "hit1": 1,
-     "hit5": 3,
-     "hit10": 3,
-     "mrr": 1.8333333333333333
-    }
-   },
-   "ms": 1055
-  },
-  "+model terms": {
-   "overall": {
-    "n": 35,
-    "hit1": 27,
-    "hit5": 34,
-    "hit10": 35,
-    "mrr": 29.759523809523806
+    "mrr": 29.68333333333333
    },
    "byKind": {
     "direct": {
@@ -433,9 +358,9 @@
     "sql": {
      "n": 4,
      "hit1": 2,
-     "hit5": 3,
+     "hit5": 4,
      "hit10": 4,
-     "mrr": 2.342857142857143
+     "mrr": 2.4000000000000004
     },
     "distractor": {
      "n": 4,
@@ -449,10 +374,85 @@
      "hit1": 1,
      "hit5": 3,
      "hit10": 3,
-     "mrr": 1.6666666666666665
+     "mrr": 1.5333333333333332
     }
    },
-   "ms": 724
+   "ms": 656
+  },
+  "+model terms": {
+   "overall": {
+    "n": 35,
+    "hit1": 26,
+    "hit5": 34,
+    "hit10": 35,
+    "mrr": 29.10833333333333
+   },
+   "byKind": {
+    "direct": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "wording": {
+     "n": 5,
+     "hit1": 3,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 3.8333333333333335
+    },
+    "converted": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "derived": {
+     "n": 5,
+     "hit1": 5,
+     "hit5": 5,
+     "hit10": 5,
+     "mrr": 5
+    },
+    "config": {
+     "n": 4,
+     "hit1": 3,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 3.5
+    },
+    "env-default": {
+     "n": 3,
+     "hit1": 3,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 3
+    },
+    "sql": {
+     "n": 4,
+     "hit1": 2,
+     "hit5": 3,
+     "hit10": 4,
+     "mrr": 2.325
+    },
+    "distractor": {
+     "n": 4,
+     "hit1": 4,
+     "hit5": 4,
+     "hit10": 4,
+     "mrr": 4
+    },
+    "wrong": {
+     "n": 3,
+     "hit1": 0,
+     "hit5": 3,
+     "hit10": 3,
+     "mrr": 0.95
+    }
+   },
+   "ms": 409
   }
  },
  "perClaim": {
@@ -492,7 +492,7 @@
    "original (git grep)": null,
    "original (regex fixed)": null,
    "rules": null,
-   "+synonyms+bm25": 3,
+   "+synonyms+bm25": 2,
    "+graph": 1,
    "+model terms": 1
   },
@@ -516,9 +516,9 @@
    "original (git grep)": null,
    "original (regex fixed)": null,
    "rules": null,
-   "+synonyms+bm25": 5,
-   "+graph": 5,
-   "+model terms": 4
+   "+synonyms+bm25": 4,
+   "+graph": 4,
+   "+model terms": 3
   },
   "c09": {
    "original (git grep)": null,
@@ -587,7 +587,7 @@
   "c17": {
    "original (git grep)": null,
    "original (regex fixed)": 1,
-   "rules": 1,
+   "rules": 2,
    "+synonyms+bm25": 1,
    "+graph": 1,
    "+model terms": 1
@@ -627,7 +627,7 @@
   "c22": {
    "original (git grep)": null,
    "original (regex fixed)": 3,
-   "rules": 3,
+   "rules": 1,
    "+synonyms+bm25": 1,
    "+graph": 1,
    "+model terms": 1
@@ -635,7 +635,7 @@
   "c23": {
    "original (git grep)": null,
    "original (regex fixed)": 2,
-   "rules": 2,
+   "rules": 1,
    "+synonyms+bm25": 1,
    "+graph": 1,
    "+model terms": 1
@@ -643,8 +643,8 @@
   "c24": {
    "original (git grep)": null,
    "original (regex fixed)": 2,
-   "rules": 2,
-   "+synonyms+bm25": 2,
+   "rules": 1,
+   "+synonyms+bm25": 1,
    "+graph": 1,
    "+model terms": 1
   },
@@ -678,7 +678,7 @@
    "rules": null,
    "+synonyms+bm25": 5,
    "+graph": 5,
-   "+model terms": 7
+   "+model terms": 8
   },
   "c29": {
    "original (git grep)": null,
@@ -716,17 +716,17 @@
    "original (git grep)": null,
    "original (regex fixed)": null,
    "rules": null,
-   "+synonyms+bm25": 2,
+   "+synonyms+bm25": 3,
    "+graph": 3,
-   "+model terms": 3
+   "+model terms": 4
   },
   "c37": {
    "original (git grep)": null,
    "original (regex fixed)": null,
    "rules": null,
-   "+synonyms+bm25": 2,
-   "+graph": 2,
-   "+model terms": 3
+   "+synonyms+bm25": 5,
+   "+graph": 5,
+   "+model terms": 5
   },
   "c38": {
    "original (git grep)": null,
@@ -734,7 +734,7 @@
    "rules": null,
    "+synonyms+bm25": 1,
    "+graph": 1,
-   "+model terms": 1
+   "+model terms": 2
   }
  }
 }

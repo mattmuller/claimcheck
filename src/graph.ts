@@ -8,7 +8,7 @@ import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type * as TS from 'typescript';
-import { EXCLUDE } from './excludes';
+import { currentExclude } from './excludes';
 import { git, isInside, isSafeRegularFile } from './gitutil';
 import { type Equivalent, type Period, equivalents } from './parse';
 import { splitWords } from './terms';
@@ -295,7 +295,7 @@ class Folder {
 }
 
 function trackedRoots(repo: string): string[] {
-  const r = git(repo, ['ls-files', '-z', '--', '.', ...EXCLUDE], { maxBuffer: 64 * 1024 * 1024, magic: true });
+  const r = git(repo, ['ls-files', '-z', '--', '.', ...currentExclude()], { maxBuffer: 64 * 1024 * 1024, magic: true });
   const out: string[] = [];
   for (const f of (r.stdout || '').split('\0')) {
     if (!f || !ROOT_EXT.test(f) || !isSafeRegularFile(repo, f)) continue;

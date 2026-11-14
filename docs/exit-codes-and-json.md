@@ -28,7 +28,7 @@ stdout, or on stderr with `--json`.
 ```
 
 For `prepare`, each claim carries `periods` and the top 5 `candidates`
-(`file`, `line`, `text`, `why`, `score`, `usedBy`). The full list of 25 stays in
+(`file`, `line`, `text`, `why`, `score`, `usedBy`). The full list (at most 25 candidates) stays in
 `<out>/work/<id>/candidates.json`.
 
 The sample above shows the main fields. `execute` also adds an `errors` array. It holds one line for each claim whose processing threw an error, and that claim has `"class": null`. A missing `answer.json` or a crashed check gives `"class": "NOT-CHECKABLE"` and adds nothing to `errors`. A run that fails before it starts prints `error` and an empty `claims` array.
