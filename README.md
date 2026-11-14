@@ -61,10 +61,14 @@ Early research, version 0.2.x. Commands and output will change. On its own bench
 ## Threat model
 
 The code and the SQL that `execute` runs are your own: a check you or your agent wrote, against a repository you chose.
-claimcheck contacts **only a database URL you pass with `--sql-url`**, and only on your own machine. It has no default URL and reads no
-environment variable for one. SQL checks run through the Postgres driver (no shell, no `psql`), in one transaction that always ends in
-`ROLLBACK`, as a plain role. Connect as a dedicated low-privilege role: claimcheck refuses a role with `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, held directly or through a role it belongs to, and a role that can read files or run programs on the server. They stop if a statement ends the transaction or changes the role. This limits mistakes. It does not make
-untrusted code safe: run claimcheck on a repository you do not trust only inside a container. Details: [SQL checks](docs/sql-checks.md#threat-model).
+
+- claimcheck contacts **only the database URL you pass with `--sql-url`**, and only on your own machine. It has no default URL and reads no environment variable for one.
+- SQL checks use the Postgres driver, with no shell and no `psql`.
+- Everything runs in one transaction that always ends in `ROLLBACK`.
+- The run stops if a statement ends the transaction or changes the role.
+- Connect as a dedicated low-privilege role. claimcheck refuses a role with `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, held directly or through a role it belongs to. It also refuses a role that can read files or run programs on the server.
+
+This limits mistakes. It does not make untrusted code safe. To run claimcheck on a repository you do not trust, use a container. Details: [SQL checks](docs/sql-checks.md#threat-model).
 
 ## Learn more
 

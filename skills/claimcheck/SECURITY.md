@@ -17,6 +17,8 @@ Checks run without your API keys in their environment variables. A check sees on
 
 If you press Ctrl+C or the process gets SIGTERM, SIGHUP or SIGQUIT, claimcheck kills the running check and everything it started, then restores the edited file. SIGKILL cannot be caught, so a `kill -9` can leave the mutated line behind: run `git status` in the target afterwards.
 
+**SQL checks are opt in.** They run only when you pass `--sql-url`, and claimcheck contacts only that URL, only on your own machine. The SQL runs in one transaction that is always rolled back, as a role you choose. Connect as a dedicated low-privilege role. claimcheck refuses a role with superuser, `CREATEROLE`, `BYPASSRLS`, `REPLICATION` or file and program privileges, unless you pass `--sql-allow-superuser`. It limits mistakes and does not sandbox hostile SQL. See [the SQL checks threat model](https://github.com/mattmuller/claimcheck/blob/main/docs/sql-checks.md#threat-model).
+
 The `--out` folder can hold output from the code under test. Keep it out of version control.
 
 `prepare` reads only tracked regular files inside the repository. It skips symlinks and paths that resolve outside it.

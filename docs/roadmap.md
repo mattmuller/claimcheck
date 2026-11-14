@@ -1,15 +1,15 @@
 # Roadmap
 
-Known gaps, taken from the first run on a large repository (22 claims from legal text). Nothing here is built yet.
+Known gaps, taken from the first run on a large repository (a set of claims from product documents). Nothing here is built yet.
 Each item says what happened and what a fix looks like. Items are in rough order of value.
 
 ## Search
 
-- **No-number claims search by words alone.** A claim such as "We count only full days" has no number. The parser reads "1 period" from the word "days" and ranks every `interval '1 day'` line.
+- **No-number claims search by words alone.** A claim such as "Only whole hours count toward the limit" has no number. The parser reads "1 period" from the word "days" and ranks every `interval '1 day'` line.
   Fix: report no period when the unit has no number, rank by BM25 alone, and print "no value found; searched by words".
-- **Bare second and millisecond totals inside strings.** "Kept for 24 hours" is `Max-Age=86400` in a template string.
+- **Bare second and millisecond totals inside strings.** "Tokens last 24 hours" can be `Max-Age=86400` in a template string.
   Fix: add the plain second and millisecond totals, with and without `_` separators, as search forms for every period.
-- **Counts and ordinals are not values.** "At most 20 versions", "the 31st day" and "five wrong attempts" give 0 periods.
+- **Counts and ordinals are not values.** "At most 20 revisions", "the 15th day" and "three failed logins" give 0 periods.
   Fix: a count form (number plus noun) and ordinals in `src/parse.ts`, carried through `src/locate.ts`.
 - **The index may be rebuilt per claim.** `prepare` took about 11 seconds a claim on a large repository, and `--json` prints nothing until the end.
   Fix: build the index once per run, show progress on stderr, and document the expected time per claim.

@@ -87,7 +87,8 @@ First release. claimcheck checks a written claim about software against the code
 - Includes a benchmark in `bench/` with 38 claims about a made-up service. `npm run bench` reproduces the numbers in the README. (93f5885)
 - Ships as one bundled file, `dist/cli.js`, run with `npx @mattmuller/claimcheck`. (26f62cf)
 
-[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/mattmuller/claimcheck/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mattmuller/claimcheck/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/mattmuller/claimcheck/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/mattmuller/claimcheck/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/mattmuller/claimcheck/compare/v0.1.0...v0.1.1

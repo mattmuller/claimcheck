@@ -17,12 +17,14 @@ describe('locate: files that never set live behaviour are left out (CC5)', () =>
     'db/seed.sql': "insert into t values (interval '30 days');\n",
     'scripts/adhoc.sql': "select interval '30 days';\n",
     'src/keep.ts': 'export const SESSION_DAYS = 30;\n',
+    'src/rollback/window.ts': 'export const ROLLBACK_SESSION_DAYS = 30;\n',
   });
   const claim = 'Sessions expire after 30 days.';
   it('ignores undo scripts, schema dumps, seed data and ad-hoc scripts by default', () => {
     const files = find(repo, claim).map((c) => c.file);
     expect(files).toContain('db/migrations/001_a.sql');
     expect(files).toContain('src/keep.ts');
+    expect(files).toContain('src/rollback/window.ts'); // application code in a folder named rollback is kept
     for (const f of ['db/migrations/001_a.down.sql', 'db/rollback/undo.sql', 'db/schema_reference.sql', 'db/seed.sql', 'scripts/adhoc.sql']) {
       expect(files).not.toContain(f);
     }
@@ -52,12 +54,12 @@ describe('locate: files that never set live behaviour are left out (CC5)', () =>
 
 describe('locate: live application code ranks above SQL for the same value (CC4)', () => {
   const files: Record<string, string> = {
-    'src/refund.ts': 'export const CANCELLATION_DAYS = 14;\n',
+    'src/refund.ts': 'export const ORDER_CANCEL_DAYS = 14;\n',
   };
   for (let i = 0; i < 6; i++) files[`db/migrations/00${i}_x.sql`] = `create function f${i}() returns void as $$ select interval '14 days'; $$ language sql;\n`;
   const repo = tempRepo(files);
   it('puts the named constant first, ahead of bare interval literals', () => {
-    const top = find(repo, 'You have a 14-day right to cancel.')[0];
+    const top = find(repo, 'Orders can be cancelled within 14 days.')[0];
     expect(top.file).toBe('src/refund.ts');
     expect(top.why).toMatch(/shares a claim word/);
   });

@@ -64,7 +64,7 @@ const LIVE_CODE = /\.(?:[cm]?[jt]sx?|py|rb|go|java|kt|rs|cs|php|swift)$/;
 
 /**
  * Live application code outranks a SQL migration that holds the same value. A named constant whose
- * identifier shares a word with the claim (`CANCELLATION_DAYS = 14` for "right to cancel") gets more.
+ * identifier shares a word with the claim (`ORDER_CANCEL_DAYS = 14` for "orders can be cancelled") gets more.
  */
 function liveCodeBonus(c: Candidate, claimWords: string[], values: Set<number>): number {
   if (!LIVE_CODE.test(c.file)) return 0;

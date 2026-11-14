@@ -40,17 +40,20 @@ export function parseLocalUrl(raw: string): Connection | { error: string } {
   let u: URL;
   try { u = new URL(raw); } catch { return { error: '--sql-url is not a valid URL' }; }
   if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:') return { error: '--sql-url must start with postgres:// or postgresql://' };
-  // a unix socket is named with ?host=/path and has no host in the URL
+  // a unix socket is named with ?host=/path (the URL host stays localhost, because a URL with a user needs one)
   const socket = u.searchParams.get('host');
   const host = socket ?? u.hostname;
-  const local = socket ? socket.startsWith('/') && u.hostname === '' : LOCAL_HOSTS.has(u.hostname.toLowerCase());
+  const local = socket ? socket.startsWith('/') && (u.hostname === '' || LOCAL_HOSTS.has(u.hostname.toLowerCase())) : LOCAL_HOSTS.has(u.hostname.toLowerCase());
   if (!local) return { error: `--sql-url host ${JSON.stringify(host)} is not this machine; claimcheck only connects to a local database (localhost, 127.0.0.1, ::1 or a socket path)` };
   const conn: Connection = { host: socket ?? (u.hostname === '[::1]' ? '::1' : u.hostname) };
   if (u.port) conn.port = Number(u.port);
-  if (u.username) conn.user = decodeURIComponent(u.username);
+  conn.user = decodeURIComponent(u.username);
   if (u.password) conn.password = decodeURIComponent(u.password);
   const db = decodeURIComponent(u.pathname.replace(/^\//, ''));
-  if (db) conn.database = db;
+  // the driver fills a missing user or database from PGUSER and PGDATABASE, so both must be in the URL
+  if (!u.username) return { error: '--sql-url must name a user (postgres://user@localhost/db); claimcheck does not read PGUSER' };
+  if (!db) return { error: '--sql-url must name a database (postgres://user@localhost/db); claimcheck does not read PGDATABASE' };
+  conn.database = db;
   return conn;
 }
 
@@ -72,7 +75,7 @@ export function splitStatements(sql: string): Statement[] {
   while (i < sql.length) {
     const c = sql[i];
     const two = sql.slice(i, i + 2);
-    if (two === '--') { const e = sql.indexOf('\n', i); copy(e < 0 ? sql.length : e, true); continue; }
+    if (two === '--') { const e = sql.slice(i).search(/[\r\n]/); copy(e < 0 ? sql.length : i + e, true); continue; }
     if (two === '/*') {
       let depth = 0; let j = i;
       do {
@@ -109,7 +112,7 @@ export function splitStatements(sql: string): Statement[] {
 const NO_OP = /^(begin|start transaction|commit|end)( work| transaction)?\s*;?$/;
 const TX_CONTROL = /^(begin|start transaction|commit|end|rollback|abort|savepoint|release|prepare transaction|commit prepared|rollback prepared)\b/;
 // a role or session-authorization change would lift the privilege limit
-const ROLE_CHANGE = /^(set|reset)\b.*\b(role|session authorization|standard_conforming_strings)\b|^reset (all|session authorization|role)\b|\bset_config\s*\(/;
+const ROLE_CHANGE = /^(set|reset)\b.*\b(role|session authorization|standard_conforming_strings|search_path)\b|^reset (all|session authorization|role)\b|\bset_config\s*\(/;
 // reaches files, programs or other servers; matched on the raw text, strings included, so it errs toward refusing
 const OUTSIDE = /\b(lo_import|lo_export|dblink\w*|pg_read_file|pg_read_binary_file|pg_ls_\w+|pg_stat_file|pg_file_\w+)\b/i;
 
@@ -123,9 +126,9 @@ export function guardSql(sql: string, label = 'the script'): { statements: strin
   if (/^[ \t]*\\/m.test(sql)) return { error: `${label} has a psql backslash command; claimcheck does not run psql` };
   const kept: string[] = [];
   for (const s of splitStatements(sql)) {
-    if (NO_OP.test(s.bare)) continue;
+    if (s.bare === '' || NO_OP.test(s.bare)) continue; // a comment alone holds no command: do not send it
     if (TX_CONTROL.test(s.bare)) return { error: `${label} contains a transaction-control statement (${s.bare.split(' ')[0]}); the run must end in ROLLBACK, so claimcheck refuses it` };
-    if (ROLE_CHANGE.test(s.bare)) return { error: `${label} changes the role or a string-parsing setting; refusing to run it` };
+    if (ROLE_CHANGE.test(s.bare)) return { error: `${label} changes the role, the search path or a string-parsing setting; refusing to run it` };
     if (/^copy\b/.test(s.bare)) return { error: `${label} runs COPY, which can read or write files and programs; refusing to run it` };
     if (OUTSIDE.test(s.text)) return { error: `${label} calls a function that reaches files or other servers (${OUTSIDE.exec(s.text)![1]}); refusing to run it` };
     kept.push(s.text);
@@ -155,7 +158,10 @@ export interface RunOptions {
 }
 
 const quoteIdent = (x: string) => `"${x.replace(/"/g, '""')}"`;
-const PROBE = 'SELECT pg_current_xact_id()::text AS x, current_user::text AS u, session_user::text AS s';
+// every name is schema-qualified, so a script that changes the search path cannot put its own function in front of the probe
+const PROBE = 'SELECT pg_catalog.pg_current_xact_id()::pg_catalog.text AS x, current_user::pg_catalog.text AS u, session_user::pg_catalog.text AS s';
+// settings a script could loosen; sent again before every statement
+const PIN = "SET LOCAL standard_conforming_strings = on; SET LOCAL statement_timeout = '30s'";
 // Role attributes that must not be held by the connecting role, directly or through any role it belongs to.
 // pg_has_role(..., 'member') is true for the role itself, so one membership test covers both.
 export const DANGEROUS_ATTRIBUTES: [alias: string, column: string][] = [
@@ -168,9 +174,9 @@ export const DANGEROUS_MEMBERSHIPS: [alias: string, role: string][] = [
 
 /** The query that reports, for one role name, every dangerous attribute it holds directly or by membership. */
 export function privilegeQuery(nameExpr: string): string {
-  const attrs = DANGEROUS_ATTRIBUTES.map(([alias, col]) => `EXISTS (SELECT 1 FROM pg_roles a WHERE a.${col} AND pg_has_role(r.oid, a.oid, 'member')) AS ${alias}`);
-  const members = DANGEROUS_MEMBERSHIPS.map(([alias, role]) => `pg_has_role(r.oid, '${role}', 'member') AS ${alias}`);
-  return `SELECT ${[...attrs, ...members].join(', ')} FROM pg_roles r WHERE r.rolname = ${nameExpr}`;
+  const attrs = DANGEROUS_ATTRIBUTES.map(([alias, col]) => `EXISTS (SELECT 1 FROM pg_catalog.pg_roles a WHERE a.${col} AND pg_catalog.pg_has_role(r.oid, a.oid, 'member')) AS ${alias}`);
+  const members = DANGEROUS_MEMBERSHIPS.map(([alias, role]) => `pg_catalog.pg_has_role(r.oid, '${role}', 'member') AS ${alias}`);
+  return `SELECT ${[...attrs, ...members].join(', ')} FROM pg_catalog.pg_roles r WHERE r.rolname = ${nameExpr}`;
 }
 const tooPowerful = (row: Record<string, unknown>) => [...DANGEROUS_ATTRIBUTES, ...DANGEROUS_MEMBERSHIPS].some(([alias]) => !!row[alias]);
 
@@ -184,9 +190,8 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
   const done = (status: RunOut['status'], output: string): RunOut => ({ status, output: output.slice(0, 2500) });
   try {
     await db.query('BEGIN');
+    await db.query(PIN);
     // the string settings that decide how the scanner and the server read quotes are pinned
-    await db.query('SET LOCAL standard_conforming_strings = on');
-    await db.query("SET LOCAL statement_timeout = '30s'");
     if (!opts.allowSuperuser) {
       const row = (await db.query(privilegeQuery('session_user'))).rows[0];
       if (!row || tooPowerful(row)) {
@@ -202,6 +207,7 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
     const base = (await db.query(PROBE)).rows[0];
     for (let i = 0; i < statements.length; i++) {
       try {
+        await db.query(PIN);
         // a named statement uses the extended protocol, so the server refuses text that holds more than one command
         await db.query({ text: statements[i], name: `cc_${i}`, values: [] });
       } catch (e) {
@@ -223,6 +229,11 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
   }
 }
 
+/** A copy of the environment without any PG* variable, so the driver cannot take a setting from it. */
+export function withoutPgEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('PG')));
+}
+
 /** A runner backed by the `pg` driver, connected to the one local database the user named. */
 export function pgRunner(conn: Connection, opts: RunOptions = {}): SqlRunner {
   return async (statements) => {
@@ -230,17 +241,24 @@ export function pgRunner(conn: Connection, opts: RunOptions = {}): SqlRunner {
       console.error('claimcheck: WARNING --sql-allow-superuser is set. The SQL runs with the full power of the connecting role: it can read and write server files, run programs, and change or commit data. Use a throwaway database you can lose.');
     }
     const pg = (await import('pg')).default;
-    // every field is set here so the driver's PG* environment fallbacks never pick another host
-    const client = new pg.Client({
-      host: conn.host, port: conn.port ?? 5432, user: conn.user, password: conn.password, database: conn.database,
-      connectionTimeoutMillis: 10_000, query_timeout: 120_000, ssl: false,
-    });
+    // host, port, user and database always come from the URL. The driver reads the PG* variables as fallbacks,
+    // so they are removed while it connects. A password left out of the URL can still come from a pgpass file.
+    const saved = process.env;
+    let client: InstanceType<typeof pg.Client>;
     try {
+      // the driver reads the environment when the client is built and again when it connects
+      process.env = withoutPgEnv(saved);
+      client = new pg.Client({
+        host: conn.host, port: conn.port ?? 5432, user: conn.user, password: conn.password, database: conn.database,
+        connectionTimeoutMillis: 10_000, query_timeout: 120_000, ssl: false,
+      });
       await client.connect();
     } catch (e) {
       const pw = conn.password;
       const m = (e as Error).message;
       return { status: 'crash', output: `could not connect: ${pw ? m.split(pw).join('[redacted]') : m}` };
+    } finally {
+      process.env = saved;
     }
     try { return await runStatements(client as unknown as Db, statements, opts); } finally { await client.end().catch(() => {}); }
   };
@@ -279,7 +297,7 @@ export async function decideSql(
   const real = build();
   if ('error' in real) return { class: 'NOT-CHECKABLE', reason: real.error };
   const realRun = await runner(real.statements);
-  if (realRun.status === 'crash') return { class: 'NOT-CHECKABLE', reason: 'the SQL check crashed on the real files (not an assertion failure)', realRun };
+  if (realRun.status === 'crash') return { class: 'NOT-CHECKABLE', reason: `the SQL check crashed on the real files (not an assertion failure): ${realRun.output.split('\n')[0]}`, realRun };
   if (realRun.status === 'assertion-fail') return { class: 'CONTRADICTED', reason: 'the SQL check fails on the real files', realRun };
 
   const lines = texts.get(target.file)!.split('\n');

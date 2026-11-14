@@ -8,6 +8,7 @@ The mutant is built in memory, so no file in your repository changes.
 
 ## What you need
 
+- Postgres 13 or newer (the probe uses `pg_current_xact_id()`).
 - A local database you can write to and throw away. A scratch database or a local container is fine.
 - `--sql-url postgres://user:password@localhost:5432/scratch` on `execute`.
 - A dedicated low-privilege role to connect as. It must not hold `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, directly or through any role it belongs to,
@@ -36,7 +37,7 @@ Set `checkKind` to `"sql"`. Put the SQL in `sql`. `target` names the token to mu
   } }
 ```
 
-- `files` are the tracked SQL files to apply, in order. They must include the target file. The default is the target file alone.
+- `files` are the tracked SQL files to apply, in order. They must include the target file. The default is the target file alone. The files are read from your working tree, so an uncommitted edit is what gets judged. Commit first.
 - `check` is SQL that fails with `ASSERT` when the claim does not hold. Only an assertion failure (SQLSTATE `P0004`)
   counts as the claim being wrong. Any other error means the check could not run, and the verdict is NOT-CHECKABLE.
 - A stronger check calls the function. Insert a row dated 29 days ago and one dated 31 days ago, call `purge_sessions()`, and assert on what is left.
@@ -67,10 +68,16 @@ The SQL is yours, and claimcheck only ever contacts the database URL you pass. T
 | Risk | What stops it |
 |---|---|
 | A script commits its changes | The scanner refuses `COMMIT` and its relatives before sending. The probe catches any that get past the scanner. The scanner is a first-line refusal with a clear message, not the guarantee |
-| Hidden commands in quoting tricks | The scanner reads `E'...'` escapes, dollar quotes and nested comments as the server does. The probe covers what it misses |
+| Hidden commands in quoting tricks | The scanner reads `E'...'` escapes, dollar quotes, nested comments and `--` comments that end at a line feed or a carriage return, as the server does. The probe covers what it misses. Every name in the probe is schema-qualified (`pg_catalog.`), and `SET search_path` is refused, so a script cannot put its own function in front of the probe |
 | Reading or writing server files, running programs | `COPY`, `lo_import`, `lo_export`, `dblink*`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_*` are refused. The connecting role must have no file or program privileges, and the run refuses a role with `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, directly or through a role it belongs to |
-| A script lifting its own privileges | The connecting role is plain, so there is nothing to lift to. `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION` and `set_config` are refused as well, and the probe checks `current_user` and `session_user` after every statement |
+| A script lifting its own privileges | The connecting role is plain, so there is nothing to lift to. `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION`, `SET search_path` and `set_config` are refused as well when written plainly, and the probe checks `current_user` and `session_user` after every statement |
 | A connection to another machine | Only a local URL is accepted. Every connection field is set explicitly, so `PG*` environment variables cannot redirect it |
+
+| Extensions that open connections | Not covered. `dblink`, `postgres_fdw`, `pg_net` and `http` let a plain role commit outside the transaction or contact other hosts. Use a scratch database without them |
+| A `localhost` URL that is really a tunnel or proxy | Not covered. claimcheck cannot tell. Check where the port goes |
+
+`standard_conforming_strings` and `statement_timeout` are sent again before every statement, so a script can loosen them only for the one statement that sets them.
+A missing password can still come from a pgpass file, which claimcheck does not block.
 
 Not covered: SQL that builds a command as a string and runs it (`EXECUTE` in a function) can hide a file function from the scanner. The low-privilege role is what stops it. That is why the role matters.
 A committed change cannot be undone by claimcheck. Use a throwaway database.

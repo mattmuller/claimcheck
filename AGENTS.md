@@ -44,6 +44,10 @@ The `answer.json` shape is in `skills/claimcheck/SKILL.md`. Every option is in t
 - `prepare` claim rows: `id`, `quote`, `periods`, `promptFile`, and the top 5 `candidates`.
 - The full shape, with an example, is in [docs/exit-codes-and-json.md](docs/exit-codes-and-json.md).
 
+### SQL checks
+
+When the value lives in SQL and the user gives you a local database URL, use `checkKind: "sql"` and run `execute --sql-url <url>`. Never ask for, guess or reuse a database URL the user did not give you. Connect as a dedicated low-privilege role. See [docs/sql-checks.md](docs/sql-checks.md).
+
 ### Limits
 
 - The target must be a git repository, and the file to mutate must be tracked.

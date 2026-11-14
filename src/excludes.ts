@@ -13,7 +13,7 @@ const PATTERNS = [
   ':!**/tests/**', ':!**/test/**', ':!**/spec/**', ':!**/e2e/**',
   ':!**/*.jsonl', ':!**/*.bak', ':!**/*.old',
   // SQL that never sets live behaviour: undo scripts, schema dumps, ad-hoc scripts and seed data
-  ':!**/*.down.sql', ':!**/rollback/**', ':!**/*schema_reference*.sql', ':!**/scripts/*.sql', ':!**/seed*.sql',
+  ':!**/*.down.sql', ':!**/rollback/**/*.sql', ':!**/*schema_reference*.sql', ':!**/scripts/*.sql', ':!**/seed*.sql',
 ];
 
 // `:!**/x` in git's default pathspec mode needs a slash before `x`, so it misses a file at the repository root.

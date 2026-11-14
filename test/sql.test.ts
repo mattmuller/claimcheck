@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type Db, type RunOut, buildStatements, decideSql, guardSql, parseLocalUrl, runStatements, splitStatements } from '../src/sql';
+import { type Db, type RunOut, buildStatements, decideSql, guardSql, parseLocalUrl, runStatements, splitStatements, withoutPgEnv } from '../src/sql';
 import { tempRepo } from './helpers';
 
 const MIGRATION = `-- sessions
@@ -26,7 +26,7 @@ function fakeDb(opts: { session?: Partial<Priv>; role?: Partial<Priv> | null; on
     async query(q) {
       const text = typeof q === 'string' ? q : q.text;
       log.push(typeof q === 'string' ? { text } : { text, name: q.name, values: q.values });
-      if (text.startsWith('SELECT pg_current_xact_id')) return { rows: [{ x: String(state.xid), u: state.user, s: state.session }] };
+      if (text.startsWith('SELECT pg_catalog.pg_current_xact_id')) return { rows: [{ x: String(state.xid), u: state.user, s: state.session }] };
       if (text.includes('rolsuper')) {
         // the session-user query has no parameter; the --sql-role query has one
         const named = typeof q !== 'string' && q.values?.length;
@@ -45,14 +45,23 @@ const sent = (log: { text: string }[]) => log.map((l) => l.text);
 
 describe('sql: only a local database, only when asked', () => {
   it('accepts localhost, loopback and a socket path', () => {
-    for (const u of ['postgres://u:p@localhost:5432/db', 'postgresql://127.0.0.1/db', 'postgres://[::1]:5433/db', 'postgres:///db?host=/var/run/postgresql']) {
+    for (const u of ['postgres://u:p@localhost:5432/db', 'postgresql://u@127.0.0.1/db', 'postgres://u@[::1]:5433/db', 'postgres://u@localhost/db?host=/var/run/postgresql']) {
       expect('error' in parseLocalUrl(u)).toBe(false);
     }
   });
   it('refuses any other host, and any other scheme', () => {
-    for (const u of ['postgres://db.example.com/x', 'postgres://10.0.0.5/x', 'postgres://localhost.example.com/x', 'postgres://localhost@evil.example/x', 'postgres:///x?host=db.example.com', 'http://localhost/x', 'not a url']) {
+    for (const u of ['postgres://u@db.example.com/x', 'postgres://u@10.0.0.5/x', 'postgres://u@localhost.example.com/x', 'postgres://localhost@evil.example/x', 'postgres://u@localhost/x?host=db.example.com', 'http://localhost/x', 'not a url']) {
       expect(parseLocalUrl(u), u).toHaveProperty('error');
     }
+  });
+  it('refuses a URL with no user or no database, because the driver would read PGUSER or PGDATABASE', () => {
+    expect(parseLocalUrl('postgres://localhost/db')).toHaveProperty('error');
+    expect(parseLocalUrl('postgres://u@localhost')).toHaveProperty('error');
+    expect(parseLocalUrl('postgres://u@localhost/')).toHaveProperty('error');
+  });
+  it('removes every PG* variable before the driver connects', () => {
+    const env = withoutPgEnv({ PATH: '/bin', HOME: '/h', PGUSER: 'a', PGPASSWORD: 'b', PGDATABASE: 'c', PGOPTIONS: 'd', PGPASSFILE: 'e', PGHOST: 'f' });
+    expect(Object.keys(env).sort()).toEqual(['HOME', 'PATH']);
   });
   it('reads every connection field from the URL', () => {
     expect(parseLocalUrl('postgres://me:s3cret@localhost:5432/app')).toEqual({ host: 'localhost', port: 5432, user: 'me', password: 's3cret', database: 'app' });
@@ -98,6 +107,9 @@ describe('sql: the scanner refuses early, with a message', () => {
     ['SET SESSION AUTHORIZATION', 'set session authorization postgres;'],
     ['set_config for role', "select set_config('role', 'postgres', false);"],
     ['changing standard_conforming_strings', 'set standard_conforming_strings = off;'],
+    ['SET search_path', 'set search_path = app, pg_catalog;'],
+    ['SET LOCAL search_path', 'set local search_path to evil;'],
+    ['a COMMIT after a comment that ends at a carriage return', '-- note\rcommit prepared \'x\';'],
   ])('refuses %s', (_n, sql) => {
     expect(buildStatements([{ label: 'm', sql }])).toHaveProperty('error');
   });
@@ -107,6 +119,12 @@ describe('sql: the scanner refuses early, with a message', () => {
     if ('error' in g) throw new Error(g.error);
     expect(g.statements[0]).toContain('begin commit; rollback; end;');
     expect(splitStatements(sql).slice(0, 2).map((s) => s.bare.split(' ')[0])).toEqual(['create', 'select']);
+  });
+  it('ends a -- comment at a carriage return, as the server does, so a COMMIT after it is seen', () => {
+    const g = guardSql("select 1;\n-- hidden\rcommit prepared 'x';");
+    expect(g).toHaveProperty('error');
+    // and a comment alone is not sent as a statement
+    expect(buildStatements([{ label: 'm', sql: 'select 1;\n-- end\n' }])).toEqual({ statements: ['select 1;'] });
   });
   it('reads an E-string the way the server does', () => {
     const parts = splitStatements("select E'it\\'s ; fine'; select 2;");
@@ -124,6 +142,27 @@ describe('sql: a mid-line backslash is inert, because there is no psql', () => {
   });
   it('never launches a process: the module does not import child_process', () => {
     expect(readFileSync(join(__dirname, '..', 'src', 'sql.ts'), 'utf8')).not.toMatch(/from 'node:child_process'|require\(['"]child_process|spawn\(/);
+  });
+});
+
+describe('sql: the probe cannot be shadowed, and the settings are re-pinned', () => {
+  it('schema-qualifies every name in the probe and the privilege query', async () => {
+    const f = fakeDb();
+    await runStatements(f.db, ['select 1']);
+    const probe = f.log.find((l) => l.text.includes('pg_current_xact_id'))!.text;
+    expect(probe).toContain('pg_catalog.pg_current_xact_id()');
+    expect(probe).not.toMatch(/(?<!pg_catalog\.)pg_current_xact_id/);
+    const priv = f.log.find((l) => l.text.includes('rolsuper'))!.text;
+    expect(priv).not.toMatch(/(?<!pg_catalog\.)\bpg_roles\b/);
+    expect(priv).not.toMatch(/(?<!pg_catalog\.)\bpg_has_role\(/);
+  });
+  it('pins standard_conforming_strings and statement_timeout before every statement', async () => {
+    const f = fakeDb();
+    await runStatements(f.db, ['select 1', 'select 2']);
+    const t = sent(f.log);
+    for (const stmt of ['select 1', 'select 2']) {
+      expect(t[t.indexOf(stmt) - 1]).toMatch(/SET LOCAL standard_conforming_strings = on; SET LOCAL statement_timeout/);
+    }
   });
 });
 
@@ -196,13 +235,13 @@ describe('sql: the connecting role is the boundary', () => {
     const f = fakeDb();
     await runStatements(f.db, ['select 1']);
     const q = f.log.find((l) => l.text.includes('rolsuper'))!.text;
-    expect(q).toContain(`EXISTS (SELECT 1 FROM pg_roles a WHERE a.${col} AND pg_has_role(r.oid, a.oid, 'member'))`);
+    expect(q).toContain(`EXISTS (SELECT 1 FROM pg_catalog.pg_roles a WHERE a.${col} AND pg_catalog.pg_has_role(r.oid, a.oid, 'member'))`);
   });
   it.each([['pg_read_server_files'], ['pg_write_server_files'], ['pg_execute_server_program']])('asks about membership of %s, and about session_user', async (role) => {
     const f = fakeDb();
     await runStatements(f.db, ['select 1']);
     const q = f.log.find((l) => l.text.includes('rolsuper'))!.text;
-    expect(q).toContain(`pg_has_role(r.oid, '${role}', 'member')`);
+    expect(q).toContain(`pg_catalog.pg_has_role(r.oid, '${role}', 'member')`);
     expect(q).toContain('r.rolname = session_user');
   });
   it('runs a powerful session user only with the explicit flag', async () => {
@@ -270,6 +309,12 @@ describe('sql: the mutant is built in memory and the verdict follows the check',
   });
   it('is NOT-CHECKABLE when the database errors for any other reason', async () => {
     expect((await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'crash', output: 'relation "sessions" does not exist' }))).class).toBe('NOT-CHECKABLE');
+  });
+  it('says why a refused role is refused, in the verdict reason', async () => {
+    const d = await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'crash', output: 'the connecting (session) role is a superuser; pass --sql-allow-superuser\nmore' }));
+    expect(d.class).toBe('NOT-CHECKABLE');
+    expect(d.reason).toContain('the connecting (session) role is a superuser');
+    expect(d.reason).not.toContain('more');
   });
   it('refuses a script that could commit, without calling the database', async () => {
     let called = false;
