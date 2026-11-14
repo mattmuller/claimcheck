@@ -13,7 +13,7 @@ import { locate } from './locate';
 import { askModel, modelAvailable } from './model';
 import { parsePeriods } from './parse';
 import { authorPrompt } from './prompt';
-import { type Connection, parseLocalUrl, psqlRunner } from './sql';
+import { type Connection, parseLocalUrl, pgRunner } from './sql';
 import { type Answer, type Class, decide } from './verdict';
 
 const COMMANDS = ['prepare', 'author', 'execute'];
@@ -70,7 +70,10 @@ Run it on a clean checkout.
 ${COMMON}
   --strict             A NOT-LOCATED or NOT-CHECKABLE claim also exits 1
   --sql-url <url>      Run SQL checks (checkKind "sql") in this LOCAL Postgres, inside a transaction that
-                       is always rolled back. Needs psql on PATH. No default and no environment fallback
+                       is always rolled back. No default and no environment fallback
+  --sql-role <role>    Run SQL checks as this role (SET LOCAL ROLE). It must not be a superuser or hold
+                       pg_read_server_files, pg_write_server_files or pg_execute_server_program
+  --sql-allow-superuser  Run even when the effective role is that powerful. Without it claimcheck refuses
 
 Exit codes: 0 no claim is CONTRADICTED or NO-TEETH, 1 at least one is (or a gap
 with --strict), 2 could not check.
@@ -131,7 +134,7 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
   if (sqlUrl !== undefined) {
     const conn = parseLocalUrl(sqlUrl);
     if ('error' in conn) fail(conn.error);
-    sqlRunner = psqlRunner(conn as Connection);
+    sqlRunner = pgRunner(conn as Connection, { role: opt('sql-role'), allowSuperuser: flag('sql-allow-superuser') });
   }
   const all = loadClaims(resolve(opt('claims') ?? 'claims.json'));
   const claims = all.filter((x) => !only || x.id === only);

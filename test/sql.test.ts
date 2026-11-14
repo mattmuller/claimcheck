@@ -1,8 +1,7 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type RunOut, buildScript, decideSql, guardSql, parseLocalUrl, psqlRunner, splitStatements } from '../src/sql';
+import { type Db, type RunOut, buildStatements, decideSql, guardSql, parseLocalUrl, runStatements, splitStatements } from '../src/sql';
 import { tempRepo } from './helpers';
 
 const MIGRATION = `-- sessions
@@ -16,7 +15,30 @@ const CHECK = `do $$ begin
   assert (select prosrc from pg_proc where proname = 'purge_sessions') like '%interval ''30 days''%', 'sessions are purged after 30 days';
 end $$;`;
 
-describe('sql: only a local database, only when asked (promise 1)', () => {
+/** A stand-in for a Postgres connection that tracks a transaction id and a role. */
+function fakeDb(opts: { superuser?: boolean; fileRole?: boolean; roleRow?: Record<string, unknown> | null; on?: Record<string, (s: { xid: number; user: string }) => void> } = {}) {
+  const state = { xid: 1, user: 'app' };
+  const log: { text: string; name?: string; values?: unknown[] }[] = [];
+  const db: Db = {
+    async query(q) {
+      const text = typeof q === 'string' ? q : q.text;
+      log.push(typeof q === 'string' ? { text } : { text, name: q.name, values: q.values });
+      if (text.startsWith('SELECT pg_current_xact_id')) return { rows: [{ x: String(state.xid), u: state.user }] };
+      if (text.includes('rolsuper')) {
+        if (opts.roleRow !== undefined) return { rows: opts.roleRow ? [opts.roleRow] : [] };
+        return { rows: [{ su: !!opts.superuser, rf: !!opts.fileRole, wf: false, xp: false }] };
+      }
+      if (text.startsWith('SET LOCAL ROLE')) { state.user = text.replace('SET LOCAL ROLE ', '').replace(/^"|"$/g, '').replace(/""/g, '"'); return { rows: [] }; }
+      const hook = opts.on?.[text];
+      if (hook) hook(state);
+      return { rows: [] };
+    },
+  };
+  return { db, log, state };
+}
+const sent = (log: { text: string }[]) => log.map((l) => l.text);
+
+describe('sql: only a local database, only when asked', () => {
   it('accepts localhost, loopback and a socket path', () => {
     for (const u of ['postgres://u:p@localhost:5432/db', 'postgresql://127.0.0.1/db', 'postgres://[::1]:5433/db', 'postgres:///db?host=/var/run/postgresql']) {
       expect('error' in parseLocalUrl(u)).toBe(false);
@@ -27,9 +49,8 @@ describe('sql: only a local database, only when asked (promise 1)', () => {
       expect(parseLocalUrl(u), u).toHaveProperty('error');
     }
   });
-  it('keeps the password out of the command line', () => {
-    const c = parseLocalUrl('postgres://me:s3cret@localhost:5432/app');
-    expect(c).toEqual({ env: { PGHOST: 'localhost', PGPORT: '5432', PGUSER: 'me', PGPASSWORD: 's3cret', PGDATABASE: 'app' } });
+  it('reads every connection field from the URL', () => {
+    expect(parseLocalUrl('postgres://me:s3cret@localhost:5432/app')).toEqual({ host: 'localhost', port: 5432, user: 'me', password: 's3cret', database: 'app' });
   });
   it('stays NOT-CHECKABLE and sends nothing when no runner was given', async () => {
     const repo = tempRepo({ 'db/migrations/1.sql': MIGRATION });
@@ -39,19 +60,11 @@ describe('sql: only a local database, only when asked (promise 1)', () => {
   });
 });
 
-describe('sql: every script ends in ROLLBACK (promise 2)', () => {
-  it('wraps the parts in BEGIN ... ROLLBACK', () => {
-    const b = buildScript([{ label: 'm', sql: MIGRATION }, { label: 'c', sql: CHECK }]);
+describe('sql: the scanner refuses early, with a message', () => {
+  it('drops a bare BEGIN and COMMIT from a migration', () => {
+    const b = buildStatements([{ label: 'm', sql: 'BEGIN;\ncreate table t(i int);\nCOMMIT;\n' }]);
     if ('error' in b) throw new Error(b.error);
-    expect(b.script.startsWith('BEGIN;\n')).toBe(true);
-    expect(b.script.trimEnd().endsWith('ROLLBACK;')).toBe(true);
-    expect(b.script.match(/^ROLLBACK;$/gm)).toHaveLength(1);
-  });
-  it('drops a bare BEGIN and COMMIT from a migration, so its COMMIT cannot persist anything', () => {
-    const b = buildScript([{ label: 'm', sql: `BEGIN;\ncreate table t(i int);\nCOMMIT;\n` }]);
-    if ('error' in b) throw new Error(b.error);
-    expect(b.script).not.toMatch(/commit/i);
-    expect(b.script.match(/\bBEGIN\b/gi)).toHaveLength(1);
+    expect(b.statements).toEqual(['create table t(i int);']);
   });
   it.each([
     ['commit prepared', "commit prepared 'x';"],
@@ -62,78 +75,157 @@ describe('sql: every script ends in ROLLBACK (promise 2)', () => {
     ['start transaction', 'start transaction read write;'],
     ['abort', 'abort;'],
     ['prepare transaction', "prepare transaction 'x';"],
-    ['a backslash command', '\\! echo hi\nselect 1;'],
-    ['copy program', "copy t to program 'cat';"],
-    ['hidden after a comment', '-- ok\n/* x */ commit prepared \'y\';'],
-  ])('refuses %s before anything is sent', (_n, sql) => {
-    expect(buildScript([{ label: 'm', sql }])).toHaveProperty('error');
+    ['hidden after a comment', "-- ok\n/* x */ commit prepared 'y';"],
+    ['a backslash command at the start of a line', '\\! echo hi\nselect 1;'],
+    ['an E-string that hides a COMMIT from a scanner that ignores backslash escapes', "select E'\\''; commit prepared 'x'; select 'y'"],
+    ['COPY to a file', "copy t to '/tmp/out.csv';"],
+    ['COPY from a program', "copy t from program 'cat /etc/passwd';"],
+    ['COPY with no file words visible', 'copy t (i) to stdout;'],
+    ['lo_import', "select lo_import('/etc/passwd');"],
+    ['lo_export', "select lo_export(1, '/tmp/x');"],
+    ['dblink', "select * from dblink('host=other', 'select 1') as t(i int);"],
+    ['dblink_connect', "select dblink_connect('x');"],
+    ['pg_read_file', "select pg_read_file('/etc/passwd');"],
+    ['pg_read_binary_file', "select pg_read_binary_file('/etc/passwd');"],
+    ['pg_ls_dir', "select pg_ls_dir('/');"],
+    ['SET ROLE', 'set role postgres;'],
+    ['RESET ROLE', 'reset role;'],
+    ['SET SESSION AUTHORIZATION', 'set session authorization postgres;'],
+    ['set_config for role', "select set_config('role', 'postgres', false);"],
+    ['changing standard_conforming_strings', 'set standard_conforming_strings = off;'],
+  ])('refuses %s', (_n, sql) => {
+    expect(buildStatements([{ label: 'm', sql }])).toHaveProperty('error');
   });
   it('is not fooled by keywords inside a function body, a string or a comment', () => {
     const sql = `create function f() returns void as $$ begin commit; rollback; end; $$ language plpgsql;\nselect 'rollback;';\n-- commit prepared 'x';\n`;
     const g = guardSql(sql);
     if ('error' in g) throw new Error(g.error);
-    expect(g.sql).toContain('begin commit; rollback; end;'); // the body is sent untouched
+    expect(g.statements[0]).toContain('begin commit; rollback; end;');
     expect(splitStatements(sql).slice(0, 2).map((s) => s.bare.split(' ')[0])).toEqual(['create', 'select']);
   });
-  it('sends exactly the built script to psql, with the password only in the environment', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cc-fakepsql-'));
-    const sink = join(dir, 'stdin.txt');
-    const envSink = join(dir, 'env.txt');
-    const fake = join(dir, 'psql');
-    writeFileSync(fake, `#!/bin/sh\ncat > ${sink}\nenv | grep -E '^(PG|AI_GATEWAY)' > ${envSink}\necho "args: $@" >> ${envSink}\n`);
-    chmodSync(fake, 0o755);
-    const saved = process.env.PATH;
-    process.env.PATH = `${dir}:${saved}`;
-    process.env.AI_GATEWAY_API_KEY = 'leak-me';
-    try {
-      const run = psqlRunner({ env: { PGHOST: 'localhost', PGPASSWORD: 'pw1' } });
-      const script = 'BEGIN;\nselect 1;\nROLLBACK;\n';
-      const out = await run(script);
-      expect(out.status).toBe('pass');
-      expect(readFileSync(sink, 'utf8')).toBe(script);
-      const env = readFileSync(envSink, 'utf8');
-      expect(env).toMatch(/PGPASSWORD=pw1/);
-      expect(env).not.toMatch(/leak-me/);
-      expect(env).not.toMatch(/pw1.*args|args:.*pw1/);
-    } finally {
-      process.env.PATH = saved;
-      delete process.env.AI_GATEWAY_API_KEY;
+  it('reads an E-string the way the server does', () => {
+    const parts = splitStatements("select E'it\\'s ; fine'; select 2;");
+    expect(parts).toHaveLength(2);
+  });
+});
+
+describe('sql: a mid-line backslash is inert, because there is no psql', () => {
+  it('sends the text to the server unchanged, as one statement', async () => {
+    const f = fakeDb();
+    const sqlText = 'select 1 \\! echo hi';
+    const out = await runStatements(f.db, [sqlText]);
+    expect(out.status).toBe('pass');
+    expect(sent(f.log)).toContain(sqlText);
+  });
+  it('never launches a process: the module does not import child_process', () => {
+    expect(readFileSync(join(__dirname, '..', 'src', 'sql.ts'), 'utf8')).not.toMatch(/from 'node:child_process'|require\(['"]child_process|spawn\(/);
+  });
+});
+
+describe('sql: the run is one rolled-back transaction, and notices when it is not', () => {
+  it('opens a transaction, sends each statement alone as a named statement, and ends with ROLLBACK', async () => {
+    const f = fakeDb();
+    const out = await runStatements(f.db, ['create table a(i int)', 'select 1']);
+    expect(out.status).toBe('pass');
+    expect(f.log[0].text).toBe('BEGIN');
+    expect(f.log.at(-1)?.text).toBe('ROLLBACK');
+    const mine = f.log.filter((l) => l.name);
+    expect(mine.map((l) => l.text)).toEqual(['create table a(i int)', 'select 1']);
+    expect(mine.every((l) => Array.isArray(l.values))).toBe(true);
+    expect(f.log.filter((l) => l.text === 'ROLLBACK')).toHaveLength(1);
+  });
+  it('sends ROLLBACK last after an assertion failure and after any other error', async () => {
+    for (const code of ['P0004', '42P01']) {
+      const f = fakeDb({ on: { boom: () => { throw Object.assign(new Error('x'), { code }); } } });
+      const out = await runStatements(f.db, ['select 1', 'boom', 'select 2']);
+      expect(out.status).toBe(code === 'P0004' ? 'assertion-fail' : 'crash');
+      expect(f.log.at(-1)?.text).toBe('ROLLBACK');
+      expect(sent(f.log)).not.toContain('select 2');
+    }
+  });
+  it('detects a statement that ends the transaction, even one the scanner let through', async () => {
+    // "select hidden" stands for a COMMIT that got past the scanner: the transaction id changes
+    const f = fakeDb({ on: { 'select hidden': (s) => { s.xid += 1; } } });
+    const out = await runStatements(f.db, ['select 1', 'select hidden', 'delete from sessions']);
+    expect(out.status).toBe('crash');
+    expect(out.output).toMatch(/ended the transaction/);
+    expect(out.output).toMatch(/statement 2/);
+    expect(sent(f.log)).not.toContain('delete from sessions');
+    expect(f.log.at(-1)?.text).toBe('ROLLBACK');
+  });
+  it('detects a role change in the middle of a run', async () => {
+    const f = fakeDb({ on: { 'select sneaky': (s) => { s.user = 'postgres'; } } });
+    const out = await runStatements(f.db, ['select sneaky', 'select 2']);
+    expect(out.status).toBe('crash');
+    expect(out.output).toMatch(/changed the role/);
+  });
+});
+
+describe('sql: runs as a low-privilege role', () => {
+  it('refuses a superuser connection with no --sql-role, and runs nothing', async () => {
+    const f = fakeDb({ superuser: true });
+    const out = await runStatements(f.db, ['select 1']);
+    expect(out.status).toBe('crash');
+    expect(out.output).toMatch(/--sql-role/);
+    expect(out.output).toMatch(/--sql-allow-superuser/);
+    expect(sent(f.log)).not.toContain('select 1');
+    expect(f.log.at(-1)?.text).toBe('ROLLBACK');
+  });
+  it('refuses a connection that can read server files', async () => {
+    const f = fakeDb({ fileRole: true });
+    expect((await runStatements(f.db, ['select 1'])).status).toBe('crash');
+  });
+  it('runs a superuser connection only with the explicit flag', async () => {
+    const f = fakeDb({ superuser: true });
+    expect((await runStatements(f.db, ['select 1'], { allowSuperuser: true })).status).toBe('pass');
+  });
+  it('switches to the named role before any statement, with the name quoted', async () => {
+    const f = fakeDb({ superuser: true, roleRow: { su: false, rf: false, wf: false, xp: false } });
+    const out = await runStatements(f.db, ['select 1'], { role: 'check"er' });
+    expect(out.status).toBe('pass');
+    const t = sent(f.log);
+    expect(t.indexOf('SET LOCAL ROLE "check""er"')).toBeGreaterThan(-1);
+    expect(t.indexOf('SET LOCAL ROLE "check""er"')).toBeLessThan(t.indexOf('select 1'));
+  });
+  it('refuses a named role that is a superuser or can run programs, and one that does not exist', async () => {
+    for (const roleRow of [{ su: true, rf: false, wf: false, xp: false }, { su: false, rf: false, wf: false, xp: true }, null]) {
+      const f = fakeDb({ roleRow });
+      const out = await runStatements(f.db, ['select 1'], { role: 'r' });
+      expect(out.status).toBe('crash');
+      expect(sent(f.log)).not.toContain('select 1');
     }
   });
 });
 
 describe('sql: the mutant is built in memory and the verdict follows the check', () => {
-  // a runner that reads the interval out of the script it is given and applies the claim
-  const fakeDb = (seen: string[]): ((s: string) => Promise<RunOut>) => async (script) => {
-    seen.push(script);
-    const m = script.match(/interval '(\d+) days'/);
-    return m && m[1] === '30' ? { status: 'pass', output: '' } : { status: 'assertion-fail', output: 'ERROR:  P0004: assertion failed' };
+  // a runner that reads the interval out of the statements it is given and applies the claim
+  const fakeRunner = (seen: string[][]) => async (statements: string[]): Promise<RunOut> => {
+    seen.push(statements);
+    const m = statements.join('\n').match(/interval '(\d+) days'/);
+    return m && m[1] === '30' ? { status: 'pass', output: '' } : { status: 'assertion-fail', output: 'P0004' };
   };
   const repo = tempRepo({ 'db/migrations/1.sql': MIGRATION });
   const target = { file: 'db/migrations/1.sql', line: 4, token: "'30 days'" };
 
-  it('is PROVEN: passes on the real file, fails on the 31-day mutant, and every script rolled back', async () => {
-    const seen: string[] = [];
-    const d = await decideSql(repo, target, { check: CHECK }, fakeDb(seen));
+  it('is PROVEN: passes on the real file, fails on the 31-day mutant, and no file is touched', async () => {
+    const seen: string[][] = [];
+    const d = await decideSql(repo, target, { check: CHECK }, fakeRunner(seen));
     expect(d.class).toBe('PROVEN');
     expect(seen).toHaveLength(2);
-    expect(seen[1]).toContain("interval '31 days'");
-    for (const s of seen) expect(s.trimEnd().endsWith('ROLLBACK;')).toBe(true);
-    expect(readFileSync(join(repo, target.file), 'utf8')).toBe(MIGRATION); // no file was touched
+    expect(seen[1].join('\n')).toContain("interval '31 days'");
+    expect(readFileSync(join(repo, target.file), 'utf8')).toBe(MIGRATION);
   });
   it('is NO-TEETH when the check passes on the mutant too', async () => {
-    const d = await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'pass', output: '' }));
-    expect(d.class).toBe('NO-TEETH');
+    expect((await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'pass', output: '' }))).class).toBe('NO-TEETH');
   });
   it('is CONTRADICTED when the check fails on the real file, and never runs a mutant', async () => {
-    const seen: string[] = [];
-    const d = await decideSql(repo, { ...target, token: "'30 days'" }, { check: CHECK }, async (s) => { seen.push(s); return { status: 'assertion-fail', output: '' }; });
+    const seen: string[][] = [];
+    const d = await decideSql(repo, target, { check: CHECK }, async (s) => { seen.push(s); return { status: 'assertion-fail', output: '' }; });
     expect(d.class).toBe('CONTRADICTED');
     expect(seen).toHaveLength(1);
   });
   it('is NOT-CHECKABLE when the database errors for any other reason', async () => {
-    const d = await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'crash', output: 'ERROR: relation "sessions" does not exist' }));
-    expect(d.class).toBe('NOT-CHECKABLE');
+    expect((await decideSql(repo, target, { check: CHECK }, async () => ({ status: 'crash', output: 'relation "sessions" does not exist' }))).class).toBe('NOT-CHECKABLE');
   });
   it('refuses a script that could commit, without calling the database', async () => {
     let called = false;
@@ -141,7 +233,7 @@ describe('sql: the mutant is built in memory and the verdict follows the check',
     expect(d.class).toBe('NOT-CHECKABLE');
     expect(called).toBe(false);
   });
-  it('refuses files outside the repository and untracked files', async () => {
+  it('refuses files outside the repository', async () => {
     const d = await decideSql(repo, target, { files: ['../x.sql', target.file], check: CHECK }, async () => ({ status: 'pass', output: '' }));
     expect(d.class).toBe('NOT-CHECKABLE');
   });

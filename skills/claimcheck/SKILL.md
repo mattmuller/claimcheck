@@ -55,7 +55,7 @@ For no possible check: `"notCheckable": "why"`. `file` is relative to REPO. `lin
 When the value lives in SQL (an `interval` in a function) and the user gave you a local database URL, write a SQL check
 instead of answering `notCheckable`. Set `"checkKind": "sql"` and add `"sql": { "files": [...], "check": "..." }`.
 The check must fail with `ASSERT`. Run `execute` with `--sql-url <url>`. Never ask for, guess or reuse a database URL
-the user did not give you. The tool refuses any host that is not this machine, and always rolls back.
+the user did not give you. The tool refuses any host that is not this machine, runs as a plain role (`--sql-role`), and always rolls back.
 See `docs/sql-checks.md`.
 
 ## Rules, and why they exist

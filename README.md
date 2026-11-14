@@ -58,6 +58,14 @@ Early research, version 0.2.x. Commands and output will change. On its own bench
 
 `execute` edits one line of your code and restores it. Checks are not sandboxed. Run it on a clean checkout ([Safety](docs/usage.md#safety)).
 
+## Threat model
+
+The code and the SQL that `execute` runs are your own: a check you or your agent wrote, against a repository you chose.
+claimcheck contacts **only a database URL you pass with `--sql-url`**, and only on your own machine. It has no default URL and reads no
+environment variable for one. SQL checks run through the Postgres driver (no shell, no `psql`), in one transaction that always ends in
+`ROLLBACK`, as a low-privilege role. They stop if a statement ends the transaction or changes the role. This limits mistakes. It does not make
+untrusted code safe: run claimcheck on a repository you do not trust only inside a container. Details: [SQL checks](docs/sql-checks.md#threat-model).
+
 ## Learn more
 
 - [How it works](docs/how-it-works.md): the steps, why breaking the code proves the check, what it cannot catch

@@ -23,15 +23,18 @@ Build option 2 as an optional runner, and keep the static check as a roadmap ite
 The runner keeps the 0.1 verdicts and the 0.1 proof. The check passes on the real files, fails on the mutant, and only an
 assertion failure counts as a failure.
 
-Four rules keep it safe:
+Five rules keep it safe:
 
 1. **Opt in, local only.** The database comes from `--sql-url` and nowhere else. There is no default and no environment fallback.
-   Any host other than `localhost`, `127.0.0.1`, `::1` or a socket path is refused.
-2. **Always rolls back.** All SQL runs in one transaction built by claimcheck: `BEGIN`, the files, the check, `ROLLBACK`. Before sending,
-   it drops a bare `BEGIN` or `COMMIT` and refuses any other transaction control, any psql backslash command and `COPY ... PROGRAM`.
-   The scan ignores comments, strings, quoted names and dollar-quoted bodies.
-3. **The mutant lives in memory.** The mutated text goes to the database and nothing is written to the repository. The git-restore step of 0.1 is not needed.
-4. **No new dependency.** The runner calls the `psql` command line. The password goes to `psql` in the environment, never on the command line.
+   Any host other than `localhost`, `127.0.0.1`, `::1` or a socket path is refused. Every connection field is set explicitly.
+2. **No shell.** The runner uses the `pg` driver. It never starts `psql`, so there are no backslash meta-commands. (An early draft used `psql` and a keyword filter.
+   A security review showed a filter cannot be the guarantee, so the design changed.) `pg` is the one new dependency, loaded only when `--sql-url` is used.
+3. **Always rolls back, and notices when it cannot.** The runner sends `BEGIN`, then each statement alone as a named prepared statement (the server refuses a message with more than one command),
+   then `ROLLBACK`, always last. After every statement it probes `pg_current_xact_id()` and `current_user`. A change means a statement ended the transaction or changed role. The run stops and says so.
+   The statement scanner stays as a first-line refusal with a clear message. It reads `E''` escapes and dollar quotes as the server does, and is not what the guarantee rests on.
+4. **Low privilege.** The run uses `SET LOCAL ROLE` to a role that is not a superuser and holds none of `pg_read_server_files`, `pg_write_server_files`, `pg_execute_server_program`.
+   A powerful connecting role is refused unless the user passes `--sql-allow-superuser`. File and server functions and `COPY` are refused as well.
+5. **The mutant lives in memory.** The mutated text goes to the database and nothing is written to the repository.
 
 ## Consequences
 
@@ -39,10 +42,10 @@ Four rules keep it safe:
   It does not mean the deployed database matches the files. The docs say so.
 - The guard is a lexical scan, not a SQL parser. It errs toward refusing. A script it refuses can be rewritten, or the claim stays NOT-CHECKABLE.
 - A scratch database is still real code execution as the user in the URL. The docs say to use a throwaway database.
-- The ROLLBACK promise has tests. They check that every script sent ends in `ROLLBACK`, and that each refused statement is refused before the runner is called.
-  They use a fake runner and a fake `psql`, so they need no database.
+- The ROLLBACK and probe promises have tests against a stand-in connection that tracks a transaction id and a role. They need no database.
+- A statement that commits is detected after it ran, not prevented. The scanner is the only thing that stops it first. That is why the docs say to use a throwaway database.
 
 ## Not done
 
-- A real-database test of the rollback. The runner has no such test, because it would need a database in CI.
+- A real-database test of the runner. It has none, because it would need a database in CI. The "one command per message" rule relies on documented Postgres behaviour and is not tested here.
 - Mutating SQL operators (`<` to `<=`) and other non-numeric tokens. See the roadmap.
