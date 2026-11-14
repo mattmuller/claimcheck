@@ -6,6 +6,23 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
+### Added
+
+- SQL checks. With `--sql-url <local postgres url>`, `execute` runs a claim's SQL check in a transaction that always ends in `ROLLBACK`, and builds the mutant in memory. It connects only to the URL you pass, only on this machine. See `docs/sql-checks.md` and `docs/adr/0001-sql-checks.md`.
+- `--exclude <glob>` (repeatable) and `--no-default-excludes` on `prepare` and `author`.
+- `docs/roadmap.md` lists the known gaps.
+
+### Changed
+
+- The search leaves out SQL that never sets live behaviour: `*.down.sql`, `rollback/`, `*schema_reference*.sql`, `scripts/*.sql` and `seed*.sql`.
+- A migration whose function a later migration redefines is ranked lower, and `why` names the later file.
+- Live application code now ranks above SQL for the same value. A named constant that shares a word with the claim ranks higher still.
+- A numeric literal with underscores (`86_400_000`, `1_000`) is one number. The mutant adds one to the whole literal (`86_400_001`). It used to bump the first digit group.
+- `prepare` returns at most 25 candidates in total, with SQL taking at most half. It used to return up to 38. The docs now say the same.
+- The benchmark: top 5 stays 35 of 35. First place is 27 of 35 with the value map and 26 of 35 with model-suggested words (was 27).
+
 ## [0.1.3] - 2026-11-04
 
 ### Changed

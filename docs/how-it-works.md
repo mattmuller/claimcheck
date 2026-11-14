@@ -53,7 +53,7 @@ each form and score every hit:
 
 Then a word-ranking search finds lines whose names mean what the claim means, and a value map
 finds values built from other constants or read from configuration. Both are described in [Finding the right line](finding-the-right-line.md).
-Tests, lock files, snapshots, build output and documentation are skipped, so the search finds code,
+Tests, lock files, snapshots, build output, documentation and SQL that never sets live behaviour (undo scripts, seed data) are skipped, so the search finds code,
 not other descriptions of the code. Configuration files (JSON, YAML, `.env` examples) are searched.
 The result is a short ranked list of lines, each with the reason it was found.
 
@@ -91,6 +91,13 @@ tests a different setting that also happens to be 90. Both pass on the real code
 becomes `91` on the located line, both still pass, so the claim is marked NO-TEETH and thrown out.
 Only a check that really reads the located value fails on the broken copy. The model can propose
 a check, but only the code's own behaviour can make a claim PROVEN.
+
+## Claims enforced in SQL
+
+A retention rule often lives in a SQL function, such as `delete ... where created_at < now() - interval '30 days'`. A TypeScript
+check cannot import that. With `--sql-url`, `execute` runs a SQL check in a local Postgres instead, inside a transaction that always
+rolls back, and builds the mutant in memory. The verdicts mean the same, with one limit: the check proves what the file defines, not
+what a deployed database runs. See [SQL checks](sql-checks.md) and [ADR 0001](adr/0001-sql-checks.md).
 
 ## What it cannot catch yet
 

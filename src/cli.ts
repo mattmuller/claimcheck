@@ -6,18 +6,21 @@
 // Exit codes (pytest convention): 0 nothing wrong, 1 a claim looks false (or --strict gap), 2 could not check.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { configureExcludes } from './excludes';
 import { expandTerms } from './expand';
 import { differsMessage, git, unchanged } from './gitutil';
 import { locate } from './locate';
 import { askModel, modelAvailable } from './model';
 import { parsePeriods } from './parse';
 import { authorPrompt } from './prompt';
+import { type Connection, parseLocalUrl, psqlRunner } from './sql';
 import { type Answer, type Class, decide } from './verdict';
 
 const COMMANDS = ['prepare', 'author', 'execute'];
 const CLASSES: Class[] = ['PROVEN', 'CONTRADICTED', 'NO-TEETH', 'NOT-LOCATED', 'NOT-CHECKABLE'];
 const [cmd, ...rest] = process.argv.slice(2);
 const opt = (k: string) => { const i = rest.indexOf(`--${k}`); return i < 0 ? undefined : rest[i + 1]; };
+const optAll = (k: string) => rest.flatMap((a, i) => (a === `--${k}` && rest[i + 1] !== undefined ? [rest[i + 1]] : []));
 const flag = (k: string) => rest.includes(`--${k}`);
 const asJson = flag('json');
 // with --json, stdout carries the report and nothing else
@@ -39,6 +42,8 @@ candidates.json and author.prompt.txt. Edits nothing in the repository.
 
 ${COMMON}
   --model-terms        Add model-suggested search words (needs CLAIMCHECK_MODEL)
+  --exclude <glob>     Leave out files matching a git glob, for example 'legacy/**'. Repeat it for more
+  --no-default-excludes  Search only what --exclude leaves out; drop the built-in list
 
 Exit codes: 0 done, 2 could not check.
 `,
@@ -50,6 +55,8 @@ Without a model, write each answer.json by hand and run execute.
 
 ${COMMON}
   --model-terms        Add model-suggested search words
+  --exclude <glob>     Leave out files matching a git glob. Repeat it for more
+  --no-default-excludes  Drop the built-in exclude list
 
 Exit codes: 0 done, 2 could not check (including no model configured).
 `,
@@ -62,6 +69,8 @@ Run it on a clean checkout.
 
 ${COMMON}
   --strict             A NOT-LOCATED or NOT-CHECKABLE claim also exits 1
+  --sql-url <url>      Run SQL checks (checkKind "sql") in this LOCAL Postgres, inside a transaction that
+                       is always rolled back. Needs psql on PATH. No default and no environment fallback
 
 Exit codes: 0 no claim is CONTRADICTED or NO-TEETH, 1 at least one is (or a gap
 with --strict), 2 could not check.
@@ -114,8 +123,16 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
   const repo = resolve(opt('repo') ?? '.');
   const out = resolve(opt('out') ?? 'results');
   const only = opt('only');
+  configureExcludes(optAll('exclude'), !flag('no-default-excludes'));
   const strict = flag('strict');
   if (!existsSync(repo) || git(repo, ['rev-parse', '--show-toplevel']).status !== 0) fail(`--repo ${repo} is not a git repository`);
+  let sqlRunner;
+  const sqlUrl = opt('sql-url');
+  if (sqlUrl !== undefined) {
+    const conn = parseLocalUrl(sqlUrl);
+    if ('error' in conn) fail(conn.error);
+    sqlRunner = psqlRunner(conn as Connection);
+  }
   const all = loadClaims(resolve(opt('claims') ?? 'claims.json'));
   const claims = all.filter((x) => !only || x.id === only);
   if (only && claims.length === 0) fail(`--only ${only}: no such claim id in the claims file`);
@@ -136,10 +153,10 @@ async function run(): Promise<{ report: Record<string, unknown>; exitCode: numbe
       } else {
         try {
           const answer = JSON.parse(readFileSync(f, 'utf8')) as Answer;
-          if (answer.target && !answer.notLocated && !answer.notCheckable && isDirty(repo, answer.target.file)) {
+          if (answer.target && !answer.notLocated && !answer.notCheckable && answer.checkKind !== 'sql' && isDirty(repo, answer.target.file)) {
             throw new Error(differsMessage(answer.target.file));
           }
-          const res = await decide(repo, checkFile, answer);
+          const res = await decide(repo, checkFile, answer, { sqlRunner });
           writeFileSync(w(c.id, 'result.json'), JSON.stringify(res, null, 1));
           say(`${c.id}: ${res.class} (${res.located ?? '-'}) ${res.reason}`);
           klass = res.class; reason = res.reason;

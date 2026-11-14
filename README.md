@@ -54,7 +54,7 @@ Next, an agent or a person picks the line and writes a check. The [agent skill](
 
 ## Status
 
-Early research, version 0.1.x. Commands and output will change. On its own benchmark, the search puts the right line in the top 5 for 35 of 35 claims. That benchmark is small and made up. It tests the search, not the verdicts ([details](docs/finding-the-right-line.md)).
+Early research, version 0.2.x. Commands and output will change. On its own benchmark, the search puts the right line in the top 5 for 35 of 35 claims. That benchmark is small and made up. It tests the search, not the verdicts ([details](docs/finding-the-right-line.md)).
 
 `execute` edits one line of your code and restores it. Checks are not sandboxed. Run it on a clean checkout ([Safety](docs/usage.md#safety)).
 
@@ -65,6 +65,8 @@ Early research, version 0.1.x. Commands and output will change. On its own bench
 - [Finding the right line](docs/finding-the-right-line.md): the research and the measurements
 - [Models](docs/models.md): where a model helps, and how to skip it
 - [Usage](docs/usage.md): commands, options and safety
+- [SQL checks](docs/sql-checks.md): claims enforced in SQL, run in a local database that always rolls back
+- [Roadmap](docs/roadmap.md): known gaps and what comes next
 - [Exit codes and JSON](docs/exit-codes-and-json.md): for scripts and CI
 - [Status](docs/status.md), [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Changelog](CHANGELOG.md)
 

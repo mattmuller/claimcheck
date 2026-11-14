@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { type Target, withMutation } from './mutate';
 import { killTree, track, untrack } from './procs';
+import { type RunOut, type SqlAnswerPart, type SqlRunner, decideSql } from './sql';
 
 export type Class = 'PROVEN' | 'CONTRADICTED' | 'NO-TEETH' | 'NOT-LOCATED' | 'NOT-CHECKABLE';
 
@@ -12,15 +13,14 @@ export interface Answer {
   target: Target | null;
   notLocated: false | string;
   notCheckable: false | string;
-  checkKind?: 'behavioural' | 'literal';
+  checkKind?: 'behavioural' | 'literal' | 'sql';
+  /** for checkKind "sql": the SQL files to apply and the SQL check (see docs/adr/0001-sql-checks.md) */
+  sql?: SqlAnswerPart;
   checkSource?: string;
   notes?: string;
 }
 
-export interface RunOut {
-  status: 'pass' | 'assertion-fail' | 'crash';
-  output: string;
-}
+export type { RunOut };
 
 // claimcheck's own tsx, run with the current node: no npx, no install in the target repo
 function tsxCli(): string {
@@ -92,10 +92,20 @@ export interface Result {
   notes?: string;
 }
 
-export async function decide(repo: string, checkFile: string, a: Answer): Promise<Result> {
+export interface DecideOptions {
+  /** runs SQL scripts in a local Postgres the user named; absent means SQL checks stay NOT-CHECKABLE */
+  sqlRunner?: SqlRunner;
+}
+
+export async function decide(repo: string, checkFile: string, a: Answer, opts: DecideOptions = {}): Promise<Result> {
   const base = { located: a.target ? `${a.target.file}:${a.target.line}` : null, subject: a.subject, notes: a.notes };
   if (a.notLocated) return { ...base, class: 'NOT-LOCATED', reason: a.notLocated };
   if (a.notCheckable) return { ...base, class: 'NOT-CHECKABLE', reason: a.notCheckable };
+  if (a.checkKind === 'sql') {
+    if (!a.target) return { ...base, class: 'NOT-LOCATED', reason: 'no target in the answer' };
+    const d = await decideSql(repo, a.target, a.sql, opts.sqlRunner);
+    return { ...base, checkKind: 'sql', checkSource: a.sql?.check, ...d };
+  }
   if (!a.target || !a.checkSource) return { ...base, class: 'NOT-LOCATED', reason: 'no target or check in the answer' };
   mkdirSync(dirname(checkFile), { recursive: true });
   writeFileSync(checkFile, a.checkSource);
