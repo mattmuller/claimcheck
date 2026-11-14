@@ -10,8 +10,8 @@
 //      transaction id and the role are unchanged. A statement that ended the transaction is detected, the
 //      run stops and says so. The scanner below is only a first-line refusal with a clear message: it is
 //      not what the guarantee rests on.
-//   4. It runs as a low-privilege role. A superuser, or a role that can read files or run programs on the
-//      server, is refused unless the user passes an explicit flag.
+//   4. The connecting role is the boundary: a superuser, a member of one, a role that can create roles, or one that
+//      can read files or run programs on the server is refused unless the user passes an explicit flag.
 //   5. The mutant is built in memory. No file in the repository is touched.
 import { readBytes } from './gitutil';
 import { mutatedLine, refuseTarget } from './mutate';
@@ -148,18 +148,28 @@ export function buildStatements(parts: { label: string; sql: string }[]): { stat
 export interface Db { query(q: string | { text: string; values?: unknown[]; name?: string }): Promise<{ rows: Record<string, unknown>[] }> }
 
 export interface RunOptions {
-  /** run as this role, set with SET LOCAL ROLE */
+  /** run as this role, set with SET LOCAL ROLE. An extra layer only: the connecting role is the boundary */
   role?: string;
-  /** run even when the effective role is a superuser or can read files or run programs on the server */
+  /** run even when the connecting role is a superuser, belongs to one, can create roles, or can read files or run programs on the server */
   allowSuperuser?: boolean;
 }
 
 const quoteIdent = (x: string) => `"${x.replace(/"/g, '""')}"`;
-const PROBE = 'SELECT pg_current_xact_id()::text AS x, current_user::text AS u';
+const PROBE = 'SELECT pg_current_xact_id()::text AS x, current_user::text AS u, session_user::text AS s';
+// A role is too powerful when it is a superuser, belongs to one, can create roles, or can touch the server's files or programs.
+const PRIVILEGE_SELECT = `SELECT r.rolsuper OR EXISTS (SELECT 1 FROM pg_roles s WHERE s.rolsuper AND pg_has_role(r.oid, s.oid, 'member')) AS su,
+  r.rolcreaterole AS cr,
+  pg_has_role(r.oid, 'pg_read_server_files', 'member') AS rf,
+  pg_has_role(r.oid, 'pg_write_server_files', 'member') AS wf,
+  pg_has_role(r.oid, 'pg_execute_server_program', 'member') AS xp
+FROM pg_roles r WHERE r.rolname = `;
+const tooPowerful = (row: Record<string, unknown>) => !!(row.su || row.cr || row.rf || row.wf || row.xp);
 
 /**
  * Run statements on one connection inside BEGIN ... ROLLBACK. The rollback is always sent, last, whatever
- * happened. After every statement a probe confirms the same transaction and role are still in force.
+ * happened. The connection itself is the security boundary: the session user must be a plain role.
+ * SET ROLE is only an extra layer, because a script that can run RESET ROLE would lift it. After every
+ * statement a probe confirms the same transaction, current_user and session_user are still in force.
  */
 export async function runStatements(db: Db, statements: string[], opts: RunOptions = {}): Promise<RunOut> {
   const done = (status: RunOut['status'], output: string): RunOut => ({ status, output: output.slice(0, 2500) });
@@ -168,18 +178,17 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
     // the string settings that decide how the scanner and the server read quotes are pinned
     await db.query('SET LOCAL standard_conforming_strings = on');
     await db.query("SET LOCAL statement_timeout = '30s'");
-    if (opts.role) {
-      const r = await db.query({ text: 'SELECT rolsuper AS su, pg_has_role(oid, \'pg_read_server_files\', \'member\') AS rf, pg_has_role(oid, \'pg_write_server_files\', \'member\') AS wf, pg_has_role(oid, \'pg_execute_server_program\', \'member\') AS xp FROM pg_roles WHERE rolname = $1', values: [opts.role] });
-      const row = r.rows[0];
-      if (!row) return done('crash', `role ${JSON.stringify(opts.role)} does not exist`);
-      if (!opts.allowSuperuser && (row.su || row.rf || row.wf || row.xp)) return done('crash', `role ${JSON.stringify(opts.role)} is a superuser or can read files or run programs on the server; pick a plain role, or pass --sql-allow-superuser`);
-      await db.query(`SET LOCAL ROLE ${quoteIdent(opts.role)}`);
-    } else if (!opts.allowSuperuser) {
-      const r = await db.query("SELECT rolsuper AS su, pg_has_role(oid, 'pg_read_server_files', 'member') AS rf, pg_has_role(oid, 'pg_write_server_files', 'member') AS wf, pg_has_role(oid, 'pg_execute_server_program', 'member') AS xp FROM pg_roles WHERE rolname = current_user");
-      const row = r.rows[0];
-      if (!row || row.su || row.rf || row.wf || row.xp) {
-        return done('crash', 'the connecting role is a superuser or can read files or run programs on the server. Pass --sql-role <a plain role> to run as that role, or --sql-allow-superuser to run anyway (the SQL then has the full power of that role)');
+    if (!opts.allowSuperuser) {
+      const row = (await db.query(`${PRIVILEGE_SELECT}session_user`)).rows[0];
+      if (!row || tooPowerful(row)) {
+        return done('crash', 'the connecting (session) role is a superuser, belongs to one, can create roles, or can read files or run programs on the server. The SQL could lift any limit set inside the session, so claimcheck refuses. Connect as a dedicated low-privilege role, or pass --sql-allow-superuser to run anyway (the SQL then has the full power of that role)');
       }
+    }
+    if (opts.role) {
+      const row = (await db.query({ text: `${PRIVILEGE_SELECT}$1`, values: [opts.role] })).rows[0];
+      if (!row) return done('crash', `role ${JSON.stringify(opts.role)} does not exist`);
+      if (!opts.allowSuperuser && tooPowerful(row)) return done('crash', `role ${JSON.stringify(opts.role)} is a superuser, belongs to one, can create roles, or can read files or run programs on the server; pick a plain role`);
+      await db.query(`SET LOCAL ROLE ${quoteIdent(opts.role)}`);
     }
     const base = (await db.query(PROBE)).rows[0];
     for (let i = 0; i < statements.length; i++) {
@@ -193,7 +202,7 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
       }
       let now: Record<string, unknown> | undefined;
       try { now = (await db.query(PROBE)).rows[0]; } catch { now = undefined; }
-      if (!now || now.x !== base.x || now.u !== base.u) {
+      if (!now || now.x !== base.x || now.u !== base.u || now.s !== base.s) {
         return done('crash', `statement ${i + 1} ended the transaction or changed the role (the probe no longer matches). Its changes may have been committed to the database. Run stopped.`);
       }
     }
@@ -208,6 +217,9 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
 /** A runner backed by the `pg` driver, connected to the one local database the user named. */
 export function pgRunner(conn: Connection, opts: RunOptions = {}): SqlRunner {
   return async (statements) => {
+    if (opts.allowSuperuser) {
+      console.error('claimcheck: WARNING --sql-allow-superuser is set. The SQL runs with the full power of the connecting role: it can read and write server files, run programs, and change or commit data. Use a throwaway database you can lose.');
+    }
     const pg = (await import('pg')).default;
     // every field is set here so the driver's PG* environment fallbacks never pick another host
     const client = new pg.Client({

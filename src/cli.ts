@@ -71,9 +71,9 @@ ${COMMON}
   --strict             A NOT-LOCATED or NOT-CHECKABLE claim also exits 1
   --sql-url <url>      Run SQL checks (checkKind "sql") in this LOCAL Postgres, inside a transaction that
                        is always rolled back. No default and no environment fallback
-  --sql-role <role>    Run SQL checks as this role (SET LOCAL ROLE). It must not be a superuser or hold
-                       pg_read_server_files, pg_write_server_files or pg_execute_server_program
-  --sql-allow-superuser  Run even when the effective role is that powerful. Without it claimcheck refuses
+  --sql-role <role>    Extra layer: SET LOCAL ROLE to this plain role. The connecting role must already be
+                       a dedicated low-privilege role: no superuser, CREATEROLE, file or program privileges
+  --sql-allow-superuser  Run even when the connecting role is that powerful, with a warning
 
 Exit codes: 0 no claim is CONTRADICTED or NO-TEETH, 1 at least one is (or a gap
 with --strict), 2 could not check.

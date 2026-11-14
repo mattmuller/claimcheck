@@ -10,14 +10,16 @@ The mutant is built in memory, so no file in your repository changes.
 
 - A local database you can write to and throw away. A scratch database or a local container is fine.
 - `--sql-url postgres://user:password@localhost:5432/scratch` on `execute`.
-- A plain role to run as: `--sql-role <role>`. The role must not be a superuser and must not hold `pg_read_server_files`,
-  `pg_write_server_files` or `pg_execute_server_program`. The connecting user must be allowed to `SET ROLE` to it.
+- A dedicated low-privilege role to connect as. It must not be a superuser, belong to a superuser role, have `CREATEROLE`,
+  or hold `pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`. The connection is the security boundary.
+- Optional: `--sql-role <role>`, an extra layer. The run does `SET LOCAL ROLE` to it. The same limits apply to that role.
+  It is not a boundary on its own, because a script that runs `RESET ROLE` would lift it. The probe below catches that.
 
 claimcheck connects to nothing else. It has no default URL and reads no environment variable for one.
 It refuses any host that is not `localhost`, `127.0.0.1`, `::1` or a socket path.
 
-If the connecting role is a superuser, or can read files or run programs on the server, and you gave no `--sql-role`, claimcheck refuses to run.
-It prints why. Pass `--sql-allow-superuser` to run anyway. The SQL then has the full power of that role.
+claimcheck checks the session user first. If it is too powerful, it refuses to run and says why.
+`--sql-allow-superuser` runs anyway and prints a warning. The SQL then has the full power of that role: it can read and write server files, run programs and commit data. Use it only on a database you can lose.
 
 ## The answer
 
@@ -45,7 +47,7 @@ Set `checkKind` to `"sql"`. Put the SQL in `sql`. `target` names the token to mu
 BEGIN
 SET LOCAL standard_conforming_strings = on
 SET LOCAL statement_timeout = '30s'
-SET LOCAL ROLE <role>            -- when --sql-role is given
+SET LOCAL ROLE <role>            -- only when --sql-role is given (an extra layer)
 <each statement of each file, one at a time>
 <each statement of the check, one at a time>
 ROLLBACK                         -- always sent, last, whatever happened
@@ -55,7 +57,7 @@ It runs twice: once on the real files, once with the target line mutated.
 
 - **No shell.** The Postgres driver (`pg`) sends the SQL. `psql` is never started, so a backslash meta-command is only text that the server rejects.
 - **One command per message.** Each statement goes as a named prepared statement. The server refuses a message that holds more than one command.
-- **A probe after every statement.** claimcheck reads `pg_current_xact_id()` and `current_user` after each statement. If either changed, a statement ended the
+- **A probe after every statement.** claimcheck reads `pg_current_xact_id()`, `current_user` and `session_user` after each statement. If any changed, a statement ended the
   transaction or switched role. The run stops, says which statement, and says its changes may have been committed.
 
 ## Threat model
@@ -66,8 +68,8 @@ The SQL is yours, and claimcheck only ever contacts the database URL you pass. T
 |---|---|
 | A script commits its changes | The scanner refuses `COMMIT` and its relatives before sending. The probe catches any that get past the scanner. The scanner is a first-line refusal with a clear message, not the guarantee |
 | Hidden commands in quoting tricks | The scanner reads `E'...'` escapes, dollar quotes and nested comments as the server does. The probe covers what it misses |
-| Reading or writing server files, running programs | `COPY`, `lo_import`, `lo_export`, `dblink*`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_*` are refused. The run uses a role without file or program privileges |
-| A script lifting its own privileges | `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION` and `set_config` are refused. The probe checks the role after every statement |
+| Reading or writing server files, running programs | `COPY`, `lo_import`, `lo_export`, `dblink*`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_*` are refused. The connecting role must have no file or program privileges, and the run refuses a role that is a superuser, belongs to one or can create roles |
+| A script lifting its own privileges | The connecting role is plain, so there is nothing to lift to. `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION` and `set_config` are refused as well, and the probe checks `current_user` and `session_user` after every statement |
 | A connection to another machine | Only a local URL is accepted. Every connection field is set explicitly, so `PG*` environment variables cannot redirect it |
 
 Not covered: SQL that builds a command as a string and runs it (`EXECUTE` in a function) can hide a file function from the scanner. The low-privilege role is what stops it. That is why the role matters.

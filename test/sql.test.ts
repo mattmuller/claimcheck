@@ -15,18 +15,23 @@ const CHECK = `do $$ begin
   assert (select prosrc from pg_proc where proname = 'purge_sessions') like '%interval ''30 days''%', 'sessions are purged after 30 days';
 end $$;`;
 
-/** A stand-in for a Postgres connection that tracks a transaction id and a role. */
-function fakeDb(opts: { superuser?: boolean; fileRole?: boolean; roleRow?: Record<string, unknown> | null; on?: Record<string, (s: { xid: number; user: string }) => void> } = {}) {
-  const state = { xid: 1, user: 'app' };
+type Priv = { su: boolean; cr: boolean; rf: boolean; wf: boolean; xp: boolean };
+const PLAIN: Priv = { su: false, cr: false, rf: false, wf: false, xp: false };
+
+/** A stand-in for a Postgres connection that tracks a transaction id, current_user and session_user. */
+function fakeDb(opts: { session?: Partial<Priv>; role?: Partial<Priv> | null; on?: Record<string, (s: { xid: number; user: string; session: string }) => void> } = {}) {
+  const state = { xid: 1, user: 'app', session: 'app' };
   const log: { text: string; name?: string; values?: unknown[] }[] = [];
   const db: Db = {
     async query(q) {
       const text = typeof q === 'string' ? q : q.text;
       log.push(typeof q === 'string' ? { text } : { text, name: q.name, values: q.values });
-      if (text.startsWith('SELECT pg_current_xact_id')) return { rows: [{ x: String(state.xid), u: state.user }] };
+      if (text.startsWith('SELECT pg_current_xact_id')) return { rows: [{ x: String(state.xid), u: state.user, s: state.session }] };
       if (text.includes('rolsuper')) {
-        if (opts.roleRow !== undefined) return { rows: opts.roleRow ? [opts.roleRow] : [] };
-        return { rows: [{ su: !!opts.superuser, rf: !!opts.fileRole, wf: false, xp: false }] };
+        // the session-user query has no parameter; the --sql-role query has one
+        const named = typeof q !== 'string' && q.values?.length;
+        if (named) return { rows: opts.role === null ? [] : [{ ...PLAIN, ...opts.role }] };
+        return { rows: [{ ...PLAIN, ...opts.session }] };
       }
       if (text.startsWith('SET LOCAL ROLE')) { state.user = text.replace('SET LOCAL ROLE ', '').replace(/^"|"$/g, '').replace(/""/g, '"'); return { rows: [] }; }
       const hook = opts.on?.[text];
@@ -161,39 +166,70 @@ describe('sql: the run is one rolled-back transaction, and notices when it is no
   });
 });
 
-describe('sql: runs as a low-privilege role', () => {
-  it('refuses a superuser connection with no --sql-role, and runs nothing', async () => {
-    const f = fakeDb({ superuser: true });
+describe('sql: the connecting role is the boundary', () => {
+  const POWERFUL: [string, Partial<Priv>][] = [
+    ['a superuser, or a member of one (the query counts membership)', { su: true }],
+    ['a role that can create roles', { cr: true }],
+    ['a role that can read server files', { rf: true }],
+    ['a role that can write server files', { wf: true }],
+    ['a role that can run programs on the server', { xp: true }],
+  ];
+  it.each(POWERFUL)('refuses a session user that is %s, and runs nothing', async (_n, session) => {
+    const f = fakeDb({ session });
     const out = await runStatements(f.db, ['select 1']);
     expect(out.status).toBe('crash');
-    expect(out.output).toMatch(/--sql-role/);
     expect(out.output).toMatch(/--sql-allow-superuser/);
+    expect(out.output).toMatch(/low-privilege/);
     expect(sent(f.log)).not.toContain('select 1');
     expect(f.log.at(-1)?.text).toBe('ROLLBACK');
   });
-  it('refuses a connection that can read server files', async () => {
-    const f = fakeDb({ fileRole: true });
-    expect((await runStatements(f.db, ['select 1'])).status).toBe('crash');
+  it('still refuses a powerful session user when --sql-role names a plain role', async () => {
+    const f = fakeDb({ session: { su: true }, role: {} });
+    const out = await runStatements(f.db, ['select 1'], { role: 'plain' });
+    expect(out.status).toBe('crash');
+    expect(sent(f.log)).not.toContain('SET LOCAL ROLE "plain"');
   });
-  it('runs a superuser connection only with the explicit flag', async () => {
-    const f = fakeDb({ superuser: true });
+  it('asks the database about membership of any superuser role, and about CREATEROLE', async () => {
+    const f = fakeDb();
+    await runStatements(f.db, ['select 1']);
+    const q = f.log.find((l) => l.text.includes('rolsuper'))!.text;
+    expect(q).toMatch(/EXISTS \(SELECT 1 FROM pg_roles s WHERE s\.rolsuper AND pg_has_role\(r\.oid, s\.oid, 'member'\)\)/);
+    expect(q).toMatch(/rolcreaterole/);
+    expect(q).toMatch(/session_user/);
+  });
+  it('runs a powerful session user only with the explicit flag', async () => {
+    const f = fakeDb({ session: { su: true } });
     expect((await runStatements(f.db, ['select 1'], { allowSuperuser: true })).status).toBe('pass');
   });
   it('switches to the named role before any statement, with the name quoted', async () => {
-    const f = fakeDb({ superuser: true, roleRow: { su: false, rf: false, wf: false, xp: false } });
+    const f = fakeDb();
     const out = await runStatements(f.db, ['select 1'], { role: 'check"er' });
     expect(out.status).toBe('pass');
     const t = sent(f.log);
     expect(t.indexOf('SET LOCAL ROLE "check""er"')).toBeGreaterThan(-1);
     expect(t.indexOf('SET LOCAL ROLE "check""er"')).toBeLessThan(t.indexOf('select 1'));
   });
-  it('refuses a named role that is a superuser or can run programs, and one that does not exist', async () => {
-    for (const roleRow of [{ su: true, rf: false, wf: false, xp: false }, { su: false, rf: false, wf: false, xp: true }, null]) {
-      const f = fakeDb({ roleRow });
+  it.each(POWERFUL)('refuses a named role that is %s, and one that does not exist', async (_n, role) => {
+    for (const r of [role, null]) {
+      const f = fakeDb({ role: r });
       const out = await runStatements(f.db, ['select 1'], { role: 'r' });
       expect(out.status).toBe('crash');
       expect(sent(f.log)).not.toContain('select 1');
     }
+  });
+  it('catches RESET ROLE mid-run, the way a script would lift SET ROLE', async () => {
+    // a powerful session, allowed by the flag, switched to a plain role; "select reset" stands for a RESET ROLE that got past the scanner
+    const f = fakeDb({ session: { su: true }, on: { 'select reset': (s) => { s.user = s.session; } } });
+    const out = await runStatements(f.db, ['select reset', 'select 2'], { allowSuperuser: true, role: 'plain' });
+    expect(out.status).toBe('crash');
+    expect(out.output).toMatch(/changed the role/);
+    expect(sent(f.log)).not.toContain('select 2');
+  });
+  it('catches a change of session_user mid-run', async () => {
+    const f = fakeDb({ on: { 'select swap': (s) => { s.session = 'postgres'; } } });
+    const out = await runStatements(f.db, ['select swap']);
+    expect(out.status).toBe('crash');
+    expect(out.output).toMatch(/changed the role/);
   });
 });
 

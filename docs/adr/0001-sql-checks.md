@@ -30,10 +30,12 @@ Five rules keep it safe:
 2. **No shell.** The runner uses the `pg` driver. It never starts `psql`, so there are no backslash meta-commands. (An early draft used `psql` and a keyword filter.
    A security review showed a filter cannot be the guarantee, so the design changed.) `pg` is the one new dependency, loaded only when `--sql-url` is used.
 3. **Always rolls back, and notices when it cannot.** The runner sends `BEGIN`, then each statement alone as a named prepared statement (the server refuses a message with more than one command),
-   then `ROLLBACK`, always last. After every statement it probes `pg_current_xact_id()` and `current_user`. A change means a statement ended the transaction or changed role. The run stops and says so.
+   then `ROLLBACK`, always last. After every statement it probes `pg_current_xact_id()`, `current_user` and `session_user`. A change means a statement ended the transaction or changed role. The run stops and says so.
    The statement scanner stays as a first-line refusal with a clear message. It reads `E''` escapes and dollar quotes as the server does, and is not what the guarantee rests on.
-4. **Low privilege.** The run uses `SET LOCAL ROLE` to a role that is not a superuser and holds none of `pg_read_server_files`, `pg_write_server_files`, `pg_execute_server_program`.
-   A powerful connecting role is refused unless the user passes `--sql-allow-superuser`. File and server functions and `COPY` are refused as well.
+4. **The connection is the boundary.** `SET ROLE` on a superuser session is not a limit, because the script can `RESET ROLE`. So the runner refuses when `session_user` is a superuser,
+   belongs to one (checked with `pg_has_role` against every superuser role), has `CREATEROLE`, or holds `pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`.
+   `--sql-allow-superuser` overrides it, with a loud warning. `--sql-role` stays as an extra layer, with the same limits on that role. The probe also compares `session_user`.
+   `COPY` and file and server functions are refused as well.
 5. **The mutant lives in memory.** The mutated text goes to the database and nothing is written to the repository.
 
 ## Consequences

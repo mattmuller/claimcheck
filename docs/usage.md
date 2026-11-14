@@ -30,8 +30,8 @@ Run `npx @mattmuller/claimcheck --help` for the commands, `<command> --help` for
 | `--no-default-excludes` | `prepare`, `author` | Drop the built-in exclude list. Only `--exclude` globs apply |
 | `--strict` | `execute` | A NOT-LOCATED or NOT-CHECKABLE claim also exits 1 |
 | `--sql-url <url>` | `execute` | Run SQL checks in this local Postgres. No default, no environment fallback. See [SQL checks](sql-checks.md) |
-| `--sql-role <role>` | `execute` | Run SQL checks as this plain role (`SET LOCAL ROLE`) |
-| `--sql-allow-superuser` | `execute` | Run SQL checks even when the role is a superuser or can read files or run programs on the server |
+| `--sql-role <role>` | `execute` | Extra layer: `SET LOCAL ROLE` to this plain role. The connecting role must already be plain |
+| `--sql-allow-superuser` | `execute` | Run SQL checks even when the connecting role is a superuser, belongs to one, can create roles, or can read files or run programs on the server. Prints a warning |
 | `-h`, `--help` | all | Show help |
 | `-v`, `--version` | none | Show the version |
 
