@@ -10,8 +10,8 @@ The mutant is built in memory, so no file in your repository changes.
 
 - A local database you can write to and throw away. A scratch database or a local container is fine.
 - `--sql-url postgres://user:password@localhost:5432/scratch` on `execute`.
-- A dedicated low-privilege role to connect as. It must not be a superuser, belong to a superuser role, have `CREATEROLE`,
-  or hold `pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`. The connection is the security boundary.
+- A dedicated low-privilege role to connect as. It must not hold `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, directly or through any role it belongs to,
+  and must not hold `pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`. The connection is the security boundary.
 - Optional: `--sql-role <role>`, an extra layer. The run does `SET LOCAL ROLE` to it. The same limits apply to that role.
   It is not a boundary on its own, because a script that runs `RESET ROLE` would lift it. The probe below catches that.
 
@@ -68,7 +68,7 @@ The SQL is yours, and claimcheck only ever contacts the database URL you pass. T
 |---|---|
 | A script commits its changes | The scanner refuses `COMMIT` and its relatives before sending. The probe catches any that get past the scanner. The scanner is a first-line refusal with a clear message, not the guarantee |
 | Hidden commands in quoting tricks | The scanner reads `E'...'` escapes, dollar quotes and nested comments as the server does. The probe covers what it misses |
-| Reading or writing server files, running programs | `COPY`, `lo_import`, `lo_export`, `dblink*`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_*` are refused. The connecting role must have no file or program privileges, and the run refuses a role that is a superuser, belongs to one or can create roles |
+| Reading or writing server files, running programs | `COPY`, `lo_import`, `lo_export`, `dblink*`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_*` are refused. The connecting role must have no file or program privileges, and the run refuses a role with `SUPERUSER`, `CREATEROLE`, `BYPASSRLS` or `REPLICATION`, directly or through a role it belongs to |
 | A script lifting its own privileges | The connecting role is plain, so there is nothing to lift to. `SET ROLE`, `RESET ROLE`, `SET SESSION AUTHORIZATION` and `set_config` are refused as well, and the probe checks `current_user` and `session_user` after every statement |
 | A connection to another machine | Only a local URL is accepted. Every connection field is set explicitly, so `PG*` environment variables cannot redirect it |
 

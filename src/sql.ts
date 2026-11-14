@@ -150,20 +150,29 @@ export interface Db { query(q: string | { text: string; values?: unknown[]; name
 export interface RunOptions {
   /** run as this role, set with SET LOCAL ROLE. An extra layer only: the connecting role is the boundary */
   role?: string;
-  /** run even when the connecting role is a superuser, belongs to one, can create roles, or can read files or run programs on the server */
+  /** run even when the connecting role holds SUPERUSER, CREATEROLE, BYPASSRLS or REPLICATION (itself or through a role it belongs to), or can read files or run programs on the server */
   allowSuperuser?: boolean;
 }
 
 const quoteIdent = (x: string) => `"${x.replace(/"/g, '""')}"`;
 const PROBE = 'SELECT pg_current_xact_id()::text AS x, current_user::text AS u, session_user::text AS s';
-// A role is too powerful when it is a superuser, belongs to one, can create roles, or can touch the server's files or programs.
-const PRIVILEGE_SELECT = `SELECT r.rolsuper OR EXISTS (SELECT 1 FROM pg_roles s WHERE s.rolsuper AND pg_has_role(r.oid, s.oid, 'member')) AS su,
-  r.rolcreaterole AS cr,
-  pg_has_role(r.oid, 'pg_read_server_files', 'member') AS rf,
-  pg_has_role(r.oid, 'pg_write_server_files', 'member') AS wf,
-  pg_has_role(r.oid, 'pg_execute_server_program', 'member') AS xp
-FROM pg_roles r WHERE r.rolname = `;
-const tooPowerful = (row: Record<string, unknown>) => !!(row.su || row.cr || row.rf || row.wf || row.xp);
+// Role attributes that must not be held by the connecting role, directly or through any role it belongs to.
+// pg_has_role(..., 'member') is true for the role itself, so one membership test covers both.
+export const DANGEROUS_ATTRIBUTES: [alias: string, column: string][] = [
+  ['su', 'rolsuper'], ['cr', 'rolcreaterole'], ['br', 'rolbypassrls'], ['rp', 'rolreplication'],
+];
+// Predefined roles that reach the server's files and programs.
+export const DANGEROUS_MEMBERSHIPS: [alias: string, role: string][] = [
+  ['rf', 'pg_read_server_files'], ['wf', 'pg_write_server_files'], ['xp', 'pg_execute_server_program'],
+];
+
+/** The query that reports, for one role name, every dangerous attribute it holds directly or by membership. */
+export function privilegeQuery(nameExpr: string): string {
+  const attrs = DANGEROUS_ATTRIBUTES.map(([alias, col]) => `EXISTS (SELECT 1 FROM pg_roles a WHERE a.${col} AND pg_has_role(r.oid, a.oid, 'member')) AS ${alias}`);
+  const members = DANGEROUS_MEMBERSHIPS.map(([alias, role]) => `pg_has_role(r.oid, '${role}', 'member') AS ${alias}`);
+  return `SELECT ${[...attrs, ...members].join(', ')} FROM pg_roles r WHERE r.rolname = ${nameExpr}`;
+}
+const tooPowerful = (row: Record<string, unknown>) => [...DANGEROUS_ATTRIBUTES, ...DANGEROUS_MEMBERSHIPS].some(([alias]) => !!row[alias]);
 
 /**
  * Run statements on one connection inside BEGIN ... ROLLBACK. The rollback is always sent, last, whatever
@@ -179,15 +188,15 @@ export async function runStatements(db: Db, statements: string[], opts: RunOptio
     await db.query('SET LOCAL standard_conforming_strings = on');
     await db.query("SET LOCAL statement_timeout = '30s'");
     if (!opts.allowSuperuser) {
-      const row = (await db.query(`${PRIVILEGE_SELECT}session_user`)).rows[0];
+      const row = (await db.query(privilegeQuery('session_user'))).rows[0];
       if (!row || tooPowerful(row)) {
-        return done('crash', 'the connecting (session) role is a superuser, belongs to one, can create roles, or can read files or run programs on the server. The SQL could lift any limit set inside the session, so claimcheck refuses. Connect as a dedicated low-privilege role, or pass --sql-allow-superuser to run anyway (the SQL then has the full power of that role)');
+        return done('crash', 'the connecting (session) role holds SUPERUSER, CREATEROLE, BYPASSRLS or REPLICATION (itself or through a role it belongs to), or can read files or run programs on the server. The SQL could lift any limit set inside the session, so claimcheck refuses. Connect as a dedicated low-privilege role, or pass --sql-allow-superuser to run anyway (the SQL then has the full power of that role)');
       }
     }
     if (opts.role) {
-      const row = (await db.query({ text: `${PRIVILEGE_SELECT}$1`, values: [opts.role] })).rows[0];
+      const row = (await db.query({ text: privilegeQuery('$1'), values: [opts.role] })).rows[0];
       if (!row) return done('crash', `role ${JSON.stringify(opts.role)} does not exist`);
-      if (!opts.allowSuperuser && tooPowerful(row)) return done('crash', `role ${JSON.stringify(opts.role)} is a superuser, belongs to one, can create roles, or can read files or run programs on the server; pick a plain role`);
+      if (!opts.allowSuperuser && tooPowerful(row)) return done('crash', `role ${JSON.stringify(opts.role)} holds SUPERUSER, CREATEROLE, BYPASSRLS or REPLICATION (itself or through a role it belongs to), or can read files or run programs on the server; pick a plain role`);
       await db.query(`SET LOCAL ROLE ${quoteIdent(opts.role)}`);
     }
     const base = (await db.query(PROBE)).rows[0];

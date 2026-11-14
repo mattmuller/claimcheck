@@ -15,8 +15,8 @@ const CHECK = `do $$ begin
   assert (select prosrc from pg_proc where proname = 'purge_sessions') like '%interval ''30 days''%', 'sessions are purged after 30 days';
 end $$;`;
 
-type Priv = { su: boolean; cr: boolean; rf: boolean; wf: boolean; xp: boolean };
-const PLAIN: Priv = { su: false, cr: false, rf: false, wf: false, xp: false };
+type Priv = { su: boolean; cr: boolean; br: boolean; rp: boolean; rf: boolean; wf: boolean; xp: boolean };
+const PLAIN: Priv = { su: false, cr: false, br: false, rp: false, rf: false, wf: false, xp: false };
 
 /** A stand-in for a Postgres connection that tracks a transaction id, current_user and session_user. */
 function fakeDb(opts: { session?: Partial<Priv>; role?: Partial<Priv> | null; on?: Record<string, (s: { xid: number; user: string; session: string }) => void> } = {}) {
@@ -170,6 +170,8 @@ describe('sql: the connecting role is the boundary', () => {
   const POWERFUL: [string, Partial<Priv>][] = [
     ['a superuser, or a member of one (the query counts membership)', { su: true }],
     ['a role that can create roles', { cr: true }],
+    ['a role that bypasses row security', { br: true }],
+    ['a role that can start replication', { rp: true }],
     ['a role that can read server files', { rf: true }],
     ['a role that can write server files', { wf: true }],
     ['a role that can run programs on the server', { xp: true }],
@@ -189,13 +191,19 @@ describe('sql: the connecting role is the boundary', () => {
     expect(out.status).toBe('crash');
     expect(sent(f.log)).not.toContain('SET LOCAL ROLE "plain"');
   });
-  it('asks the database about membership of any superuser role, and about CREATEROLE', async () => {
+  // The stand-in cannot run SQL, so these pin the query text. Each attribute must be tested through membership.
+  it.each([['rolsuper'], ['rolcreaterole'], ['rolbypassrls'], ['rolreplication']])('asks whether the role holds %s directly or through a role it belongs to', async (col) => {
     const f = fakeDb();
     await runStatements(f.db, ['select 1']);
     const q = f.log.find((l) => l.text.includes('rolsuper'))!.text;
-    expect(q).toMatch(/EXISTS \(SELECT 1 FROM pg_roles s WHERE s\.rolsuper AND pg_has_role\(r\.oid, s\.oid, 'member'\)\)/);
-    expect(q).toMatch(/rolcreaterole/);
-    expect(q).toMatch(/session_user/);
+    expect(q).toContain(`EXISTS (SELECT 1 FROM pg_roles a WHERE a.${col} AND pg_has_role(r.oid, a.oid, 'member'))`);
+  });
+  it.each([['pg_read_server_files'], ['pg_write_server_files'], ['pg_execute_server_program']])('asks about membership of %s, and about session_user', async (role) => {
+    const f = fakeDb();
+    await runStatements(f.db, ['select 1']);
+    const q = f.log.find((l) => l.text.includes('rolsuper'))!.text;
+    expect(q).toContain(`pg_has_role(r.oid, '${role}', 'member')`);
+    expect(q).toContain('r.rolname = session_user');
   });
   it('runs a powerful session user only with the explicit flag', async () => {
     const f = fakeDb({ session: { su: true } });

@@ -10,7 +10,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- SQL checks. With `--sql-url <local postgres url>`, `execute` runs a claim's SQL check in a transaction that always ends in `ROLLBACK`, and builds the mutant in memory. It uses the `pg` driver (no shell), connects only to the URL you pass, only on this machine, refuses a connecting role that is a superuser, belongs to one, can create roles or can read files or run programs on the server (`--sql-allow-superuser` overrides, with a warning; `--sql-role` is an extra layer), and stops if a statement ends the transaction or changes the role. See `docs/sql-checks.md` and `docs/adr/0001-sql-checks.md`.
+- SQL checks. With `--sql-url <local postgres url>`, `execute` runs a claim's SQL check in a transaction that always ends in `ROLLBACK`, and builds the mutant in memory. It uses the `pg` driver (no shell), connects only to the URL you pass, only on this machine, refuses a connecting role that holds SUPERUSER, CREATEROLE, BYPASSRLS or REPLICATION (directly or inherited) or can read files or run programs on the server (`--sql-allow-superuser` overrides, with a warning; `--sql-role` is an extra layer), and stops if a statement ends the transaction or changes the role. See `docs/sql-checks.md` and `docs/adr/0001-sql-checks.md`.
 - `--exclude <glob>` (repeatable) and `--no-default-excludes` on `prepare` and `author`.
 - `docs/roadmap.md` lists the known gaps.
 
